@@ -4,6 +4,17 @@ All notable changes to this project will be documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Test suite** — pytest tests for config, uploader, token extraction, bulk upload and tray app, with macOS-only tests for the FSEvents watcher, notifications and Chrome profile paths
+- **CI workflow** — runs the tests on macOS and Windows for pull requests and pushes to `master`
+
+### Fixed
+- Tray app crashed on start with `ValueError` from pystray when at least one watch folder was configured (folder menu callbacks had three parameters, pystray allows two)
+
+---
+
 ## [1.0.0] — 2025-09-24
 
 ### Added
