@@ -114,7 +114,7 @@ def wait_until_stable(path: Path) -> bool:
 
 def upload(path: Path, token: str) -> bool:
     size_mb = path.stat().st_size / 1_048_576
-    log.info("[1/4] Reserviere Cloud-Speicher für %s (%.1f MB)...", path.name, size_mb)
+    log.info("[1/4] Reserving cloud storage for %s (%.1f MB)...", path.name, size_mb)
 
     lock_resp = _api_post(token, "/v2/cloud_storage/lockStorageSpace", {
         "size":         path.stat().st_size,
@@ -137,16 +137,16 @@ def upload(path: Path, token: str) -> bool:
         _api_post(token, "/v2/cloud_storage/unlockStorageSpace", {"id": lock_id, "is_delete_cos": 1})
         return False
 
-    log.info("[3/4] Registriere Datei in der Cloud...")
+    log.info("[3/4] Registering file in cloud...")
     claim_resp = _api_post(token, "/v2/profile/newUploadFile", {"user_lock_space_id": lock_id})
     if not claim_resp.get("data") or "id" not in claim_resp.get("data", {}):
         log.error("claim failed: code=%s msg=%s", claim_resp.get("code"), claim_resp.get("msg"))
         _api_post(token, "/v2/cloud_storage/unlockStorageSpace", {"id": lock_id, "is_delete_cos": 1})
         return False
 
-    log.info("[4/4] Abschließen...")
+    log.info("[4/4] Finalizing...")
     _api_post(token, "/v2/cloud_storage/unlockStorageSpace", {"id": lock_id, "is_delete_cos": 0})
-    log.info("Erfolgreich hochgeladen: %s", path.name)
+    log.info("Upload complete: %s", path.name)
     return True
 
 

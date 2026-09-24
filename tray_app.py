@@ -166,17 +166,21 @@ else:
 
         def notify(self, title: str, body: str = "", kind: str = "ok"):
             try:
-                clean_title = title.replace('"', "'")
-                clean_body  = body.replace('"', "'").replace("\n", " ")
+                safe_title = title.replace("\n", " ")
+                safe_body  = body.replace("\n", " ")
                 if IS_MAC:
+                    # Pass title/body as argv to avoid AppleScript string injection
                     subprocess.Popen(
-                        ["osascript", "-e",
-                         f'display notification "{clean_body}" with title "{clean_title}"'],
+                        ["osascript",
+                         "-e", "on run {t, b}",
+                         "-e", "display notification b with title t",
+                         "-e", "end run",
+                         safe_title, safe_body],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                     )
                 else:
                     subprocess.Popen(
-                        ["notify-send", clean_title, clean_body],
+                        ["notify-send", safe_title, safe_body],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                     )
             except Exception:
@@ -303,6 +307,13 @@ class WatcherManager:
 
 # ── Catch-up on missed files ──────────────────────────────────────────────────
 
+def _safe_mtime(p: Path) -> float:
+    try:
+        return p.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
 def _catch_up(token: str, nm: NotificationManager):
     last     = load_last_upload_time()
     exts     = cfg.get_watch_extensions()
@@ -311,8 +322,8 @@ def _catch_up(token: str, nm: NotificationManager):
         (f for folder in folders if folder.exists()
          for ext in exts
          for f in folder.glob(f"*{ext}")
-         if f.stat().st_mtime > last),
-        key=lambda f: f.stat().st_mtime,
+         if _safe_mtime(f) > last),
+        key=_safe_mtime,
     )
     if not missed:
         log.info("No missed files.")
@@ -346,7 +357,7 @@ def _open_path(path: Path) -> None:
 
 # ── Tray menu builder ─────────────────────────────────────────────────────────
 
-def _build_menu(wm: WatcherManager, nm: NotificationManager, icon_ref: list):
+def _build_menu(wm: WatcherManager, nm: NotificationManager):
     """Returns a fresh pystray.Menu — called each time the menu opens."""
 
     def folder_items():
@@ -371,9 +382,12 @@ def _build_menu(wm: WatcherManager, nm: NotificationManager, icon_ref: list):
         return tuple(items)
 
     def on_quit(ic, _):
-        wm.stop()
-        nm.stop()
-        ic.stop()
+        # Run stop sequence in a thread so we don't block the AppKit main loop
+        def _stop():
+            wm.stop()
+            nm.stop()
+            ic.stop()
+        threading.Thread(target=_stop, daemon=True).start()
 
     return pystray.Menu(
         pystray.MenuItem(APP, None, enabled=False),
@@ -398,16 +412,13 @@ def _add_folder(wm: WatcherManager, nm: NotificationManager) -> None:
                 nm.notify("Folder added", str(folder).replace(str(Path.home()), "~"))
         threading.Thread(target=_pick, daemon=True).start()
     else:
+        # Run on the tkinter main thread using the existing root (never create a second Tk)
         def _show_dialog():
-            root_tmp = tk.Tk()
-            root_tmp.withdraw()
-            root_tmp.attributes("-topmost", True)
             folder = fd.askdirectory(
                 title="Select a folder to watch",
                 initialdir=str(Path.home()),
-                parent=root_tmp,
+                parent=nm._root,
             )
-            root_tmp.destroy()
             if folder:
                 wm.add_folder(Path(folder))
                 nm.notify("Folder added", folder.replace(str(Path.home()), "~"))
@@ -436,11 +447,9 @@ def main():
 
     nm = NotificationManager()
     wm = WatcherManager(token, nm)
-    icon_ref: list = []
 
     icon = pystray.Icon(APP, make_icon(64), APP)
-    icon.menu = _build_menu(wm, nm, icon_ref)
-    icon_ref.append(icon)
+    icon.menu = _build_menu(wm, nm)
 
     def _start_workers():
         wm.start()

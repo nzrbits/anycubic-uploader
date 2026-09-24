@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import json
+import os
+import threading
 from pathlib import Path
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
+_lock = threading.RLock()  # reentrant: save_token() calls load() then save()
 
 _DEFAULTS: dict = {
     "token": "",
@@ -14,19 +17,23 @@ _DEFAULTS: dict = {
 
 
 def load() -> dict:
-    if not CONFIG_FILE.exists():
-        return dict(_DEFAULTS)
-    try:
-        data = json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig"))
-        return {**_DEFAULTS, **data}
-    except Exception:
-        return dict(_DEFAULTS)
+    with _lock:
+        if not CONFIG_FILE.exists():
+            return dict(_DEFAULTS)
+        try:
+            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig"))
+            return {**_DEFAULTS, **data}
+        except Exception:
+            return dict(_DEFAULTS)
 
 
 def save(cfg: dict) -> None:
-    CONFIG_FILE.write_text(
-        json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    with _lock:
+        CONFIG_FILE.write_text(
+            json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        if os.name != "nt":  # chmod 600 on Unix so the token is not world-readable
+            os.chmod(CONFIG_FILE, 0o600)
 
 
 def load_token() -> str:
