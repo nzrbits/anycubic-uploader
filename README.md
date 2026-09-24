@@ -21,7 +21,7 @@ and uploads them to Anycubic Cloud automatically — so your printer is always r
 
 | | Windows | macOS |
 |---|---|---|
-| Python | 3.10 or later | 3.10 or later |
+| Python | 3.10 or later | 3.10 or later, with Tk |
 | Browser (token setup) | Edge or Chrome | Chrome |
 | OS | Windows 10 / 11 | macOS 12 Monterey or later |
 
@@ -176,6 +176,10 @@ This overwrites the old token in `config.json`.
 ---
 
 ## Troubleshooting
+
+**`No module named '_tkinter'` on macOS**
+Homebrew Python ships without Tk. Install it for your Python version, for example
+`brew install python-tk@3.12`. `start.sh` checks this and prints the matching command.
 
 **Tray icon doesn't appear on macOS**
 Make sure `pyobjc-framework-Cocoa` is installed: `pip install pyobjc-framework-Cocoa`
