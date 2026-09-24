@@ -7,6 +7,32 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV="$SCRIPT_DIR/.venv"
 PYTHON="$VENV/bin/python"
 
+# The tray app and token setup need tkinter. Homebrew Python ships without it.
+require_tk() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "Error: $1 not found. Install Python 3.10 or later." >&2
+        exit 1
+    fi
+    if ! "$1" -c "import tkinter" >/dev/null 2>&1; then
+        PYVER=$("$1" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")' 2>/dev/null) || PYVER=""
+        BASE=$("$1" -c 'import sys; print(sys.base_prefix)' 2>/dev/null) || BASE=""
+        echo "Error: Python ${PYVER:-?} ($1) has no working tkinter." >&2
+        if [ -n "$PYVER" ] && command -v brew >/dev/null 2>&1 \
+            && [ "${BASE#"$(brew --prefix)"}" != "$BASE" ]; then
+            echo "Install it with: brew install python-tk@$PYVER" >&2
+        else
+            echo "Install Tk support for this Python (python.org installers include it)." >&2
+        fi
+        exit 1
+    fi
+}
+
+if [ -f "$PYTHON" ]; then
+    require_tk "$PYTHON"
+else
+    require_tk python3
+fi
+
 # Create venv and install dependencies (first run only)
 if [ ! -f "$PYTHON" ]; then
     echo "Setting up Python environment..."

@@ -12,6 +12,7 @@ All notable changes to this project will be documented here.
 
 ### Fixed
 - Tray app crashed on start with `ValueError` from pystray when at least one watch folder was configured (folder menu callbacks had three parameters, pystray allows two)
+- `start.sh` now stops with an install hint when Python has no Tk, instead of crashing in `tray_app.py`
 
 ---
 
