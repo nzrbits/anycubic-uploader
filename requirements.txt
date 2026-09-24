@@ -2,3 +2,5 @@ requests>=2.32
 watchdog>=6.0
 pystray>=0.19
 Pillow>=10.0
+# macOS: AppKit backend for pystray (auto-skipped on Windows/Linux)
+pyobjc-framework-Cocoa>=9.0; sys_platform == "darwin"

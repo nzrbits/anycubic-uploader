@@ -1,3 +1,9 @@
 {
-    "token": "DEIN_ANYCUBIC_TOKEN"
+  "token": "YOUR_ANYCUBIC_TOKEN_HERE",
+  "watch_folders": [
+    "~/Downloads"
+  ],
+  "watch_extensions": [
+    ".pm4u"
+  ]
 }

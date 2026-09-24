@@ -1,4 +1,4 @@
-# Auth token – never commit
+# Auth token — never commit
 config.json
 
 # Runtime state
@@ -11,5 +11,8 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.egg-info/
+
+# Build output
 dist/
 build/
+*.spec.bak

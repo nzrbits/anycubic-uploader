@@ -1,27 +1,36 @@
-# Anycubic Cloud Auto-Uploader – Starter
-# Richtet die Python-Umgebung ein (einmalig) und startet den Watcher.
+# Anycubic Cloud Auto-Uploader — Windows Launcher
+# Sets up Python venv (once) and starts the tray app.
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Venv      = Join-Path $ScriptDir ".venv"
 $Python    = Join-Path $Venv "Scripts\python.exe"
 
-# Venv anlegen und Abhängigkeiten installieren (einmalig)
+# Create venv and install dependencies (first run only)
 if (-not (Test-Path $Python)) {
-    Write-Host "Richte Python-Umgebung ein..."
+    Write-Host "Setting up Python environment..."
     python -m venv $Venv
     & $Python -m pip install --quiet --upgrade pip
     & $Python -m pip install --quiet -r (Join-Path $ScriptDir "requirements.txt")
-    Write-Host "Fertig."
+    Write-Host "Done."
 }
 
-# Token holen falls noch keiner gespeichert ist
+# Run token setup if config.json is missing or has the placeholder token
 $ConfigFile = Join-Path $ScriptDir "config.json"
-if (-not (Test-Path $ConfigFile) -or
-    (Get-Content $ConfigFile | ConvertFrom-Json).token -eq "HIER_DEINEN_TOKEN_EINTRAGEN") {
-    Write-Host "Kein Token vorhanden – starte Token-Extraktor..."
+$NeedsToken = $false
+if (-not (Test-Path $ConfigFile)) {
+    $NeedsToken = $true
+} else {
+    $token = (Get-Content $ConfigFile -Raw | ConvertFrom-Json).token
+    if (-not $token -or $token -eq "YOUR_ANYCUBIC_TOKEN_HERE") {
+        $NeedsToken = $true
+    }
+}
+
+if ($NeedsToken) {
+    Write-Host "No token found — running token setup..."
     & $Python (Join-Path $ScriptDir "setup_token.py")
     if ($LASTEXITCODE -ne 0) { exit 1 }
 }
 
-Write-Host "Starte Anycubic Auto-Uploader (Tray)..."
+Write-Host "Starting Anycubic Auto-Uploader..."
 & $Python (Join-Path $ScriptDir "tray_app.py")

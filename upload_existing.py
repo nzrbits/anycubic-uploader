@@ -1,40 +1,48 @@
 """
-Lädt alle vorhandenen .pm4u Dateien aus dem Downloads-Ordner hoch.
-Muss nach setup_token.py ausgeführt werden.
+Upload all existing .pm4u files from all configured watch folders.
+Run this once after setup_token.py if you have files that were sliced before
+the uploader was installed.
 """
+from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
-# Shared logic aus uploader.py wiederverwenden
 sys.path.insert(0, str(Path(__file__).parent))
-from uploader import upload, load_token, WATCH_FOLDER, WATCH_EXTENSIONS
+
+import config as cfg
+from uploader import upload, load_token, WATCH_EXTENSIONS
 
 
 def main():
     token = load_token()
     if not token:
-        print("Kein Token gefunden. Bitte zuerst start.ps1 ausführen.")
+        print("No token found. Run setup_token.py first.")
         sys.exit(1)
 
+    folders = cfg.get_watch_folders()
+    exts    = cfg.get_watch_extensions()
+
     files = sorted(
-        f for ext in WATCH_EXTENSIONS
-        for f in WATCH_FOLDER.glob(f"*{ext}")
+        f
+        for folder in folders if folder.exists()
+        for ext in exts
+        for f in folder.glob(f"*{ext}")
     )
 
     if not files:
-        print(f"Keine {'/'.join(WATCH_EXTENSIONS)} Dateien in {WATCH_FOLDER} gefunden.")
+        print(f"No {'/'.join(exts)} files found in:")
+        for folder in folders:
+            print(f"  {folder}")
         sys.exit(0)
 
-    print(f"{len(files)} Datei(en) gefunden:\n")
+    print(f"Found {len(files)} file(s):\n")
     for f in files:
-        mb = f.stat().st_size / 1_048_576
-        print(f"  {f.name} ({mb:.1f} MB)")
+        size_mb = f.stat().st_size / 1_048_576
+        print(f"  {f.name} ({size_mb:.1f} MB)")
 
     print()
-    ok = 0
-    fail = 0
+    ok = fail = 0
     for f in files:
         try:
             if upload(f, token):
@@ -42,10 +50,10 @@ def main():
             else:
                 fail += 1
         except Exception as e:
-            print(f"FEHLER bei {f.name}: {e}")
+            print(f"ERROR: {f.name}: {e}")
             fail += 1
 
-    print(f"\nFertig: {ok} erfolgreich, {fail} fehlgeschlagen.")
+    print(f"\nDone: {ok} succeeded, {fail} failed.")
 
 
 if __name__ == "__main__":
