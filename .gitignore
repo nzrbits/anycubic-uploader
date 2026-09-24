@@ -1,0 +1,15 @@
+# Auth token – never commit
+config.json
+
+# Runtime state
+last_upload.json
+watcher.log
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
