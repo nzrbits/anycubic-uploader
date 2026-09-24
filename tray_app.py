@@ -360,6 +360,14 @@ def _open_path(path: Path) -> None:
 def _build_menu(wm: WatcherManager, nm: NotificationManager):
     """Returns a fresh pystray.Menu — called each time the menu opens."""
 
+    # pystray only accepts actions with at most two parameters (icon, item),
+    # so the folder is bound in a closure instead of a default argument.
+    def open_action(fp: Path):
+        return lambda ic, it: _open_path(fp)
+
+    def remove_action(fp: Path):
+        return lambda ic, it: wm.remove_folder(fp)
+
     def folder_items():
         items = []
         for folder in wm.get_folders():
@@ -368,12 +376,9 @@ def _build_menu(wm: WatcherManager, nm: NotificationManager):
             sub = pystray.Menu(
                 pystray.MenuItem(
                     "Open in Explorer" if IS_WIN else "Open in Finder",
-                    lambda ic, it, fp=f: _open_path(fp),
+                    open_action(f),
                 ),
-                pystray.MenuItem(
-                    "Remove",
-                    lambda ic, it, fp=f: wm.remove_folder(fp),
-                ),
+                pystray.MenuItem("Remove", remove_action(f)),
             )
             items.append(pystray.MenuItem(label, sub))
 

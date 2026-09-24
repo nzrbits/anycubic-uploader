@@ -57,11 +57,25 @@ Run the app:
 
 ---
 
+## Running tests
+
+```bash
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+The tests mock the Anycubic API, so no token or network is needed.
+Tests marked macOS-only (FSEvents watcher, `osascript` notifications, Chrome profile paths) are skipped on other systems.
+Python needs Tk support, otherwise the tray and token tests fail on import.
+Homebrew Python does not include Tk unless you install `python-tk`.
+
+---
+
 ## Submitting a pull request
 
 1. Fork the repo and create a branch: `git checkout -b feature/my-thing`
 2. Make your changes
-3. Test on your platform
+3. Run the tests and test on your platform
 4. Open a PR with a clear description of what changed and why
 
 Please keep PRs focused — one feature or fix per PR makes review much easier.
