@@ -93,6 +93,7 @@ Help wanted confirming these work:
 | macOS 13 Ventura / Python 3.12 | needs testing |
 | macOS 14 Sonoma / Python 3.12 | needs testing |
 | macOS 15 Sequoia / Python 3.12 | needs testing |
+| macOS 26 Tahoe / Python 3.10–3.13 | ✅ tests pass, app starts (menu bar icon not checked visually) |
 
 If you test on any of these, please open an issue or PR to update this table.
 
