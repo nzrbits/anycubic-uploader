@@ -1,4 +1,4 @@
-"""Tray artwork, notifications and folder dialogs for each platform."""
+"""Tray artwork and notifications for each platform."""
 
 from __future__ import annotations
 
@@ -6,10 +6,7 @@ import logging
 import platform
 import queue
 import subprocess
-import threading
 import tkinter as tk
-import tkinter.filedialog as fd
-from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageTk
 
@@ -86,7 +83,9 @@ if IS_WIN:
             )
             cvs.pack()
 
-            _fill_rounded_rect(cvs, 0, 0, self.W, self.H, 14, DARK)
+            background = "#42171b" if kind == "error" else DARK
+            body_color = "#fecaca" if kind == "error" else "#64748b"
+            _fill_rounded_rect(cvs, 0, 0, self.W, self.H, 14, background)
             col = STATUS_COLORS.get(kind, STATUS_COLORS["ok"])
             _fill_rounded_rect(cvs, 4, 12, 8, self.H - 12, 2, col)
 
@@ -110,11 +109,12 @@ if IS_WIN:
                     text=line,
                     anchor="w",
                     font=("Segoe UI", 9),
-                    fill="#64748b",
+                    fill=body_color,
                 )
 
             self._win = win
-            self._fade(0.0, 0.92, ms=200, done=lambda: win.after(3800, self._out))
+            opacity = 1.0 if kind == "error" else 0.92
+            self._fade(0.0, opacity, ms=200, done=lambda: win.after(3800, self._out))
 
         def _out(self):
             self._fade(0.92, 0.0, ms=350, done=self._win.destroy)
@@ -180,16 +180,6 @@ if IS_WIN:
                 self._root.destroy()
                 self._root = None
 
-        def select_folder(self, selected):
-            def pick():
-                folder = fd.askdirectory(
-                    title="Select a folder to watch", parent=self._root
-                )
-                if folder:
-                    selected(Path(folder))
-
-            self.schedule_on_main(pick)
-
         def stop(self):
             self.schedule_on_main(lambda: self._root.quit())
 
@@ -225,28 +215,6 @@ else:
                     )
             except OSError:
                 logger.exception("Could not show notification")
-
-        def select_folder(self, selected):
-            def pick():
-                args = (
-                    [
-                        "osascript",
-                        "-e",
-                        'POSIX path of (choose folder with prompt "Select a folder to watch:")',
-                    ]
-                    if IS_MAC
-                    else ["zenity", "--file-selection", "--directory"]
-                )
-                try:
-                    result = subprocess.run(
-                        args, capture_output=True, text=True, check=False
-                    )
-                    if result.returncode == 0 and result.stdout.strip():
-                        selected(Path(result.stdout.strip()))
-                except OSError:
-                    self.notify("Could not open folder picker", kind="error")
-
-            threading.Thread(target=pick, daemon=True).start()
 
         def run(self):
             pass

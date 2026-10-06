@@ -34,25 +34,23 @@ For Python 3.12, that is `brew install python-tk@3.12`.
 ## Use a standalone app
 
 Download the Windows executable or macOS app from [Releases](https://github.com/nzrbits/anycubic-uploader/releases).
-The packaged app includes Python. Version 1.1.0 offers token setup on first launch.
-Version 1.0.0 still requires the separate setup script.
+The packaged app includes Python.
 
 ## Enter your token
 
-On first launch, the app asks you to paste your Anycubic `XX-Token`.
-Open Anycubic Cloud in your browser, log in, and copy the token from Local Storage.
-See the [token guide](docs/token-guide.md) for the browser steps.
+Right-click the tray icon and open **FAQ** for the [browser instructions](docs/faq.md).
+Copy your Anycubic `XX-Token`, paste it into **Settings**, and save.
 
-The app does not read browser profiles or close browser windows.
-Cancelling setup exits without changing your settings.
+The app starts without a setup wizard. If no token is saved, it shows one red notification and stays in the tray.
+Files wait until you save a token. The app does not read browser profiles or close browser windows.
 
 ## Choose folders
 
 The default folder is `~/Downloads`.
-Right-click the tray icon, open **Folders to watch**, and add or remove folders.
+Right-click the tray icon, open **Settings**, and add or remove folders.
 The app watches files directly inside each folder; it does not scan subfolders.
 
-Open **Settings** to edit the folder list, file extensions and token in one window.
+Settings contains the folder list, file extensions and token.
 Save applies the changes and checks the selected folders. Cancel leaves the settings unchanged.
 Choose **Upload pending files** to check your folders immediately and retry failed uploads.
 Files already recorded as uploaded are skipped.
@@ -71,7 +69,7 @@ After a forced exit, an unfinished upload can be retried once its 20-minute rese
 
 ## Settings and logs
 
-Open **Open settings folder** from the tray menu.
+Settings and logs are stored in your user data folder:
 
 | System | Default folder |
 | --- | --- |
@@ -129,7 +127,7 @@ The Windows GUI executable does not open a console for command output.
 
 ## Replace an expired token
 
-Run `setup_token.py` with the virtual environment's Python, or start the packaged app with `--setup-token`.
+Follow the [FAQ](docs/faq.md), then replace the token in **Settings** and save.
 The uploader reads the saved token before each attempt, so the running tray app picks up the replacement.
 
 ## Troubleshooting
@@ -138,7 +136,7 @@ The uploader reads the saved token before each attempt, so the running tray app 
 | --- | --- |
 | Authentication errors | Replace your token with the steps above |
 | File keeps being deferred | Check whether your slicer is still writing it; empty files are also deferred |
-| Folder is unavailable | Restore it or remove it from the tray menu |
+| Folder is unavailable | Restore it or remove it in Settings |
 | Upload failed | Open the log; the next scan retries the file |
 | Tk import error on macOS | Install the matching `python-tk` Homebrew package |
 

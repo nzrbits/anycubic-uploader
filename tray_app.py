@@ -9,6 +9,7 @@ import subprocess
 import threading
 import tkinter as tk
 import tkinter.messagebox as mb
+import webbrowser
 from pathlib import Path
 
 import pystray
@@ -19,12 +20,12 @@ from watchdog.observers.api import ObservedWatch
 import config as cfg
 from notifications import IS_MAC, IS_WIN, NotificationManager, make_icon
 from settings_dialog import open_settings
-from setup_token import prompt_token
 from storage import DATA_DIR, configure_logging
 from upload_queue import Result, UploadQueue
 from uploader import free_storage, log
 
 APP = "Anycubic Uploader"
+FAQ_URL = "https://github.com/nzrbits/anycubic-uploader/blob/master/docs/faq.md"
 SCAN_INTERVAL = 30
 logger = logging.getLogger(__name__)
 
@@ -109,34 +110,6 @@ class WatcherManager:
     def upload_pending(self) -> None:
         self._rescan.set()
 
-    def add_folder(self, folder: Path) -> bool:
-        folder = cfg.normalize_folder(folder)
-        with self._lock:
-            if self._stop.is_set() or not folder.is_dir():
-                return False
-            added = folder not in self._watches
-            if added:
-                self._schedule(folder)
-            try:
-                cfg.add_watch_folder(folder)
-            except Exception:
-                if added:
-                    self._observer.unschedule(self._watches.pop(folder))
-                raise
-        self._uploads.scan()
-        return True
-
-    def remove_folder(self, folder: Path) -> None:
-        folder = cfg.normalize_folder(folder)
-        with self._lock:
-            cfg.remove_watch_folder(folder)
-            watch = self._watches.pop(folder, None)
-            if watch is not None:
-                self._observer.unschedule(watch)
-
-    def get_folders(self) -> list[Path]:
-        return cfg.get_watch_folders()
-
     def stop(self) -> None:
         self._stop.set()
         self._rescan.set()
@@ -155,20 +128,6 @@ def _open_path(path: Path) -> None:
         subprocess.Popen(["open" if IS_MAC else "xdg-open", str(path)])
 
 
-def _add_folder(wm: WatcherManager, nm: NotificationManager) -> None:
-    def selected(folder: Path) -> None:
-        try:
-            if wm.add_folder(folder):
-                nm.notify("Folder added", str(folder))
-            else:
-                nm.notify("Folder unavailable", str(folder), "error")
-        except (OSError, cfg.ConfigError) as error:
-            log.exception("Could not add folder")
-            nm.notify("Could not add folder", str(error), "error")
-
-    nm.select_folder(selected)
-
-
 def _build_menu(wm: WatcherManager, nm: NotificationManager):
     def settings(icon, item):
         try:
@@ -181,33 +140,6 @@ def _build_menu(wm: WatcherManager, nm: NotificationManager):
     def upload_pending(icon, item):
         wm.upload_pending()
         nm.notify("Checking folders", kind="upload")
-
-    def open_action(folder: Path):
-        return lambda icon, item: _open_path(folder)
-
-    def remove_action(folder: Path):
-        def remove(icon, item):
-            try:
-                wm.remove_folder(folder)
-            except (OSError, cfg.ConfigError) as error:
-                nm.notify("Could not remove folder", str(error), "error")
-
-        return remove
-
-    def folder_items():
-        for folder in wm.get_folders():
-            yield pystray.MenuItem(
-                str(folder).replace(str(Path.home()), "~"),
-                pystray.Menu(
-                    pystray.MenuItem(
-                        "Open in Explorer" if IS_WIN else "Open in Finder",
-                        open_action(folder),
-                    ),
-                    pystray.MenuItem("Remove", remove_action(folder)),
-                ),
-            )
-        yield pystray.Menu.SEPARATOR
-        yield pystray.MenuItem("Add folder", lambda icon, item: _add_folder(wm, nm))
 
     def on_quit(icon, item):
         def stop():
@@ -224,37 +156,18 @@ def _build_menu(wm: WatcherManager, nm: NotificationManager):
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Settings", settings),
         pystray.MenuItem("Upload pending files", upload_pending),
-        pystray.MenuItem("Folders to watch", pystray.Menu(folder_items)),
         pystray.Menu.SEPARATOR,
+        pystray.MenuItem("FAQ", lambda icon, item: webbrowser.open(FAQ_URL)),
         pystray.MenuItem(
             "Open log", lambda icon, item: _open_path(DATA_DIR / "watcher.log")
-        ),
-        pystray.MenuItem(
-            "Open settings folder", lambda icon, item: _open_path(DATA_DIR)
         ),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Quit", on_quit),
     )
 
 
-def ensure_token() -> bool:
-    try:
-        if cfg.load_token():
-            return True
-        return prompt_token()
-    except (OSError, cfg.ConfigError) as error:
-        root = tk.Tk()
-        root.withdraw()
-        try:
-            mb.showerror(APP, str(error), parent=root)
-        finally:
-            root.destroy()
-        return False
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=APP)
-    parser.add_argument("--setup-token", action="store_true")
     parser.add_argument("--upload-existing", action="store_true")
     parser.add_argument("--settings", action="store_true")
     args = parser.parse_args()
@@ -263,15 +176,27 @@ def main() -> int:
 
         return edit_settings()
     configure_logging()
-    if args.setup_token:
-        return 0 if prompt_token() else 1
-    if not ensure_token():
-        return 1
     if args.upload_existing:
         from upload_existing import main as bulk_upload
 
         return bulk_upload()
     nm = NotificationManager()
+    try:
+        token = cfg.load_token()
+    except (OSError, cfg.ConfigError) as error:
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            mb.showerror(APP, str(error), parent=root)
+        finally:
+            root.destroy()
+        return 1
+    if not token:
+        nm.notify(
+            "No token configured",
+            "Open FAQ for browser steps.\nPaste the token in Settings.",
+            "error",
+        )
     wm = WatcherManager(nm)
     icon = pystray.Icon(APP, make_icon(64), APP)
     icon.menu = _build_menu(wm, nm)

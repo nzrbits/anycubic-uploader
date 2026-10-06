@@ -128,6 +128,60 @@ def test_queue_defers_growing_file(ready_files, monkeypatch):
     attempt.assert_not_called()
 
 
+def test_missing_token_defers_silently_and_saved_token_resumes(
+    ready_files, monkeypatch
+):
+    path = ready_files / "part.pm4u"
+    path.write_bytes(b"x")
+    config.save_token("")
+    stable = Mock(return_value=True)
+    upload = Mock(return_value=True)
+    started = Mock()
+    results = []
+    monkeypatch.setattr(uploader, "wait_until_stable", stable)
+    monkeypatch.setattr(uploader, "upload", upload)
+    worker = UploadQueue(lambda path, result: results.append(result), started)
+    try:
+        for _ in range(2):
+            assert worker.submit(path)
+            worker.wait()
+        stable.assert_not_called()
+        upload.assert_not_called()
+        started.assert_not_called()
+        config.save_token("saved")
+        assert worker.submit(path)
+        worker.wait()
+        upload.assert_called_once_with(path, "saved")
+        started.assert_called_once_with(path)
+        assert results == [Result.DEFERRED, Result.DEFERRED, Result.UPLOADED]
+    finally:
+        worker.stop()
+
+
+def test_token_removed_during_file_check_defers_without_upload(
+    ready_files, monkeypatch
+):
+    path = ready_files / "part.pm4u"
+    path.write_bytes(b"x")
+
+    def stable(path, cancel=None):
+        config.save_token("")
+        return True
+
+    upload = Mock()
+    results = []
+    monkeypatch.setattr(uploader, "wait_until_stable", stable)
+    monkeypatch.setattr(uploader, "upload", upload)
+    worker = UploadQueue(lambda path, result: results.append(result))
+    try:
+        worker.submit(path)
+        worker.wait()
+        upload.assert_not_called()
+        assert results == [Result.DEFERRED]
+    finally:
+        worker.stop()
+
+
 def test_discovery_deduplicates_and_matches_case_insensitively(tmp_path):
     a = tmp_path / "part.PM4U"
     a.write_bytes(b"x")

@@ -24,7 +24,7 @@ macOS:
 .venv/bin/python -m pytest -rs
 ```
 
-Python needs Tk for the tray and token tests.
+Python needs Tk for the tray and settings tests.
 The tests use temporary settings and databases, and simulate the cloud API.
 Observer tests use real filesystem events on the test platform.
 CI runs on Windows and macOS with Python 3.10 and 3.12.
@@ -38,9 +38,8 @@ CI runs on Windows and macOS with Python 3.10 and 3.12.
 | `uploader.py` | Cloud requests and transaction cleanup |
 | `upload_state.py` | File versions and upload ownership |
 | `upload_queue.py` | Discovery, deduplication and upload processing |
-| `notifications.py` | Icons, notifications and folder dialogs |
+| `notifications.py` | Icons and notifications |
 | `tray_app.py` | Tray menu and folder watches |
-| `setup_token.py` | Token entry |
 | `settings_dialog.py` | Settings window |
 | `upload_existing.py` | Bulk command |
 

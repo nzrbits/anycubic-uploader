@@ -100,12 +100,14 @@ class UploadQueue:
             return Result.DEFERRED
         if self._ledger.completed(version):
             return Result.SKIPPED
+        if not config.load_token():
+            return Result.DEFERRED
         if not uploader.wait_until_stable(path, self._stop):
             return Result.DEFERRED
         version = FileVersion.read(path)
         token = config.load_token()
         if not token:
-            return Result.FAILED
+            return Result.DEFERRED
         if not self._ledger.claim(version):
             return Result.SKIPPED
         success = False

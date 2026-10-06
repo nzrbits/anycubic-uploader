@@ -41,38 +41,26 @@ def test_unavailable_configured_folder_can_be_removed(tmp_path):
     config.save({"watch_folders": [str(missing)]})
     manager = tray_app.WatcherManager(Mock())
     try:
-        manager.remove_folder(missing)
-        assert manager.get_folders() == []
-    finally:
-        manager.stop()
-
-
-def test_add_rolls_back_watch_if_config_write_fails(tmp_path, monkeypatch):
-    config.save({"watch_folders": []})
-    manager = tray_app.WatcherManager(Mock())
-    monkeypatch.setattr(
-        config, "add_watch_folder", Mock(side_effect=OSError("disk full"))
-    )
-    try:
-        with pytest.raises(OSError):
-            manager.add_folder(tmp_path)
-        assert manager._watches == {}
+        config.apply_changes({"watch_folders": []}, config.load())
+        manager._sync_watches()
         assert config.get_watch_folders() == []
+        assert manager._watches == {}
     finally:
         manager.stop()
 
 
-def test_remove_keeps_watch_if_config_write_fails(tmp_path, monkeypatch):
-    config.save({"watch_folders": []})
+def test_saved_settings_replace_folder_watches(tmp_path):
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    config.save({"watch_folders": [str(first)]})
     manager = tray_app.WatcherManager(Mock())
     try:
-        assert manager.add_folder(tmp_path)
-        monkeypatch.setattr(
-            config, "remove_watch_folder", Mock(side_effect=OSError("disk full"))
-        )
-        with pytest.raises(OSError):
-            manager.remove_folder(tmp_path)
-        assert tmp_path in manager._watches
+        manager._sync_watches()
+        assert set(manager._watches) == {first}
+        config.apply_changes({"watch_folders": [str(second)]}, config.load())
+        manager._sync_watches()
+        assert set(manager._watches) == {second}
     finally:
         manager.stop()
 
@@ -149,22 +137,24 @@ def test_stop_during_scan_does_not_wait_for_next_interval(monkeypatch):
         manager.stop()
 
 
-def test_menu_actions_target_their_folder(tmp_path, monkeypatch):
-    a, b = tmp_path / "a", tmp_path / "b"
-    config.save({"watch_folders": [str(a), str(b)]})
-    opened, removed = [], []
-    monkeypatch.setattr(tray_app, "_open_path", opened.append)
-    manager = tray_app.WatcherManager(Mock())
-    monkeypatch.setattr(manager, "remove_folder", removed.append)
-    try:
-        menu = tray_app._build_menu(manager, Mock())
-        for item in _walk(menu):
-            if item.text in ("Open in Finder", "Open in Explorer", "Remove"):
-                item(None)
-        assert opened == [a, b]
-        assert removed == [a, b]
-    finally:
-        manager.stop()
+def test_menu_has_one_entry_for_each_task_and_opens_faq(monkeypatch):
+    browser = Mock(return_value=True)
+    monkeypatch.setattr(tray_app.webbrowser, "open", browser)
+    items = [
+        item
+        for item in tray_app._build_menu(Mock(), Mock()).items
+        if item is not tray_app.pystray.Menu.SEPARATOR and item.text != tray_app.APP
+    ]
+    assert [item.text for item in items] == [
+        "Settings",
+        "Upload pending files",
+        "FAQ",
+        "Open log",
+        "Quit",
+    ]
+    assert all(item.submenu is None for item in items)
+    next(item for item in items if item.text == "FAQ")(None)
+    browser.assert_called_once_with(tray_app.FAQ_URL)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows Tk queue")
