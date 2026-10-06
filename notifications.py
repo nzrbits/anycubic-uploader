@@ -159,10 +159,13 @@ if IS_WIN:
             try:
                 while True:
                     item = self._q.get_nowait()
-                    if callable(item):
-                        item()
-                    else:
-                        Toast(self._root, *item)
+                    try:
+                        if callable(item):
+                            item()
+                        else:
+                            Toast(self._root, *item)
+                    except Exception:
+                        logger.exception("Could not run notification callback")
             except queue.Empty:
                 pass
             self._root.after(80, self._poll)
@@ -170,7 +173,7 @@ if IS_WIN:
         def run(self):
             self._root = tk.Tk()
             self._root.withdraw()
-            self._poll()
+            self._root.after(0, self._poll)
             try:
                 self._root.mainloop()
             finally:

@@ -133,6 +133,19 @@ def test_windows_dialog_can_be_queued_before_root_exists():
     callback.assert_not_called()
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows Tk queue")
+def test_windows_callbacks_wait_for_mainloop(monkeypatch):
+    manager = notifications.NotificationManager()
+    root = Mock()
+    poll = Mock()
+    monkeypatch.setattr(notifications.tk, "Tk", lambda: root)
+    monkeypatch.setattr(manager, "_poll", poll)
+    root.mainloop.side_effect = lambda: poll.assert_not_called()
+    manager.run()
+    root.after.assert_called_once_with(0, poll)
+    root.destroy.assert_called_once()
+
+
 @macos_only
 def test_mac_notification_passes_text_as_argv(monkeypatch):
     calls = []
