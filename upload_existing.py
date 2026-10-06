@@ -13,7 +13,9 @@ from upload_queue import Result, UploadQueue, discover_files
 def main() -> int:
     try:
         if not config.load_token():
-            print("No token found. Run setup_token.py first.")
+            print(
+                "No token configured. Open FAQ in the tray menu, then add it in Settings."
+            )
             return 1
         files = discover_files()
     except (config.ConfigError, OSError) as error:

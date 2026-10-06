@@ -24,7 +24,7 @@ macOS:
 .venv/bin/python -m pytest -rs
 ```
 
-Python needs Tk for the tray and token tests.
+Python needs Tk for the tray and settings tests.
 The tests use temporary settings and databases, and simulate the cloud API.
 Observer tests use real filesystem events on the test platform.
 CI runs on Windows and macOS with Python 3.10 and 3.12.
@@ -33,18 +33,18 @@ CI runs on Windows and macOS with Python 3.10 and 3.12.
 
 | Module | Responsibility |
 | --- | --- |
-| `storage.py` | Data paths, file locks, atomic JSON writes and logging |
+| `storage.py` | Path normalization, data paths, file locks, atomic JSON writes and logging |
 | `config.py` | Settings validation and updates |
 | `uploader.py` | Cloud requests and transaction cleanup |
 | `upload_state.py` | File versions and upload ownership |
 | `upload_queue.py` | Discovery, deduplication and upload processing |
-| `notifications.py` | Icons, notifications and folder dialogs |
+| `notifications.py` | Icons and notifications |
 | `tray_app.py` | Tray menu and folder watches |
-| `setup_token.py` | Token entry |
 | `settings_dialog.py` | Settings window |
 | `upload_existing.py` | Bulk command |
 
 Keep upload decisions in `upload_queue.py` so event handlers and bulk uploads follow the same rules.
+The root modules are the app; `tests/`, `docs/` and `packaging/` hold tests, documentation and build files.
 Add regression tests for changed behavior, especially failures during a cloud transaction or a settings update.
 
 ## Standalone builds

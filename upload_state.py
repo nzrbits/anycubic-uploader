@@ -11,7 +11,7 @@ from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from storage import DATA_DIR
+from storage import DATA_DIR, normalize_path
 
 STATE_FILE = DATA_DIR / "uploads.sqlite3"
 LEASE_SECONDS = 1200
@@ -25,7 +25,7 @@ class FileVersion:
 
     @classmethod
     def read(cls, path: Path) -> FileVersion:
-        normalized = path.expanduser().resolve()
+        normalized = normalize_path(path)
         stat = normalized.stat()
         return cls(os.path.normcase(str(normalized)), stat.st_size, stat.st_mtime_ns)
 

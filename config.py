@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TypedDict
 
-from storage import DATA_DIR, atomic_json, file_lock
+from storage import DATA_DIR, atomic_json, file_lock, normalize_path
 
 CONFIG_FILE = DATA_DIR / "config.json"
 LEGACY_CONFIG_FILE = Path(__file__).parent / "config.json"
@@ -113,32 +113,26 @@ def apply_changes(changes: dict, original: Settings) -> None:
     _update(apply)
 
 
-def normalize_folder(folder: Path) -> Path:
-    return folder.expanduser().resolve()
-
-
 def get_watch_folders() -> list[Path]:
-    return list(
-        dict.fromkeys(normalize_folder(Path(f)) for f in load()["watch_folders"])
-    )
+    return list(dict.fromkeys(normalize_path(Path(f)) for f in load()["watch_folders"]))
 
 
 def add_watch_folder(folder: Path) -> None:
-    path = str(normalize_folder(folder))
+    path = str(normalize_path(folder))
 
     def add(settings: Settings) -> None:
-        folders = [str(normalize_folder(Path(f))) for f in settings["watch_folders"]]
+        folders = [str(normalize_path(Path(f))) for f in settings["watch_folders"]]
         settings["watch_folders"] = list(dict.fromkeys([*folders, path]))
 
     _update(add)
 
 
 def remove_watch_folder(folder: Path) -> None:
-    path = normalize_folder(folder)
+    path = normalize_path(folder)
     with _lock, file_lock(CONFIG_FILE):
         settings = _load()
         folders = [
-            f for f in settings["watch_folders"] if normalize_folder(Path(f)) != path
+            f for f in settings["watch_folders"] if normalize_path(Path(f)) != path
         ]
         if folders != settings["watch_folders"]:
             settings["watch_folders"] = folders

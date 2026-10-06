@@ -11,6 +11,7 @@ from pathlib import Path
 
 import config
 import uploader
+from storage import normalize_path
 from upload_state import FileVersion, UploadLedger
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ def discover_files() -> list[Path]:
                 if p.is_file() and p.suffix.lower() in extensions
             )
         except OSError:
-            uploader.log.warning("Cannot scan %s", folder, exc_info=True)
+            logger.warning("Cannot scan %s", folder, exc_info=True)
     return sorted(found)
 
 
@@ -58,7 +59,7 @@ class UploadQueue:
         self._worker.start()
 
     def submit(self, path: Path, block: bool = False) -> bool:
-        path = config.normalize_folder(path)
+        path = normalize_path(path)
         if path.suffix.lower() not in config.get_watch_extensions():
             return False
         try:
@@ -100,12 +101,14 @@ class UploadQueue:
             return Result.DEFERRED
         if self._ledger.completed(version):
             return Result.SKIPPED
+        if not config.load_token():
+            return Result.DEFERRED
         if not uploader.wait_until_stable(path, self._stop):
             return Result.DEFERRED
         version = FileVersion.read(path)
         token = config.load_token()
         if not token:
-            return Result.FAILED
+            return Result.DEFERRED
         if not self._ledger.claim(version):
             return Result.SKIPPED
         success = False

@@ -26,3 +26,11 @@ def test_mac_data_directory(monkeypatch):
         storage.data_directory()
         == Path.home() / "Library/Application Support/AnycubicUploader"
     )
+
+
+def test_normalize_path_expands_home_and_resolves_file_segments(tmp_path, monkeypatch):
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert (
+        storage.normalize_path(Path("~/prints/../part.pm4u")) == tmp_path / "part.pm4u"
+    )

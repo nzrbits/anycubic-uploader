@@ -6,6 +6,15 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-06
+
+### Changed
+- Startup no longer opens token setup. A missing token produces one red notification while the tray stays available.
+- Token entry and folder management live in Settings. Duplicate tray controls and the setup script were removed.
+- The tray links to a browser FAQ with token instructions and troubleshooting.
+- Uploads wait without repeated failure notifications until a token is saved.
+- Path normalization is shared, log messages use the correct module, and tests are grouped by responsibility.
+
 ## [1.1.1] - 2026-10-06
 
 ### Fixed
