@@ -1,6 +1,6 @@
 # Start the uploader at login
 
-Complete token setup before enabling autostart.
+Save your token in Settings before enabling autostart. The installers do not enable it automatically.
 
 ## Windows
 
@@ -12,7 +12,8 @@ Complete token setup before enabling autostart.
    powershell.exe -WindowStyle Hidden -File "D:\Dev\anycubic-uploader\start.ps1"
    ```
 
-For a standalone build, create a shortcut to `AnycubicUploader.exe` instead.
+For an installed app, copy its Start menu shortcut into the Startup folder.
+For a portable build, create a shortcut to `AnycubicUploader.exe` instead.
 Delete the shortcut to disable autostart.
 
 ## macOS app bundle

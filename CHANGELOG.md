@@ -6,6 +6,13 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-10-06
+
+### Added
+- A minimal Windows setup with a Start menu shortcut and uninstaller.
+- Native macOS setup packages for Apple Silicon and Intel, installed in Applications.
+- Installation and update checks that verify existing settings are preserved.
+
 ## [1.1.3] - 2026-10-06
 
 ### Fixed

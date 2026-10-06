@@ -31,14 +31,29 @@ jobs:
       - name: Build Windows executable
         run: pyinstaller packaging/windows.spec
 
+      - name: Build and verify Windows setup
+        run: |
+          ./packaging/build-windows-installer.ps1
+          ./packaging/verify-windows-installer.ps1
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: anycubic-uploader-windows
-          path: dist/AnycubicUploader.exe
+          path: |
+            dist/AnycubicUploader.exe
+            dist/AnycubicUploader-Setup.exe
 
   build-macos:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            arch: arm64
+          - os: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,7 +74,13 @@ jobs:
       - name: Build macOS app
         run: pyinstaller packaging/macos.spec
 
+      - name: Build and verify macOS installer
+        run: |
+          bash packaging/build-macos-installer.sh
+          bash packaging/verify-macos-installer.sh
+
       - name: Zip macOS app
+        if: matrix.arch == 'arm64'
         run: |
           cd dist
           zip -r AnycubicUploader-macOS.zip "Anycubic Uploader.app"
@@ -67,8 +88,10 @@ jobs:
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: anycubic-uploader-macos
-          path: dist/AnycubicUploader-macOS.zip
+          name: anycubic-uploader-macos-${{ matrix.arch }}
+          path: |
+            dist/AnycubicUploader-macOS-${{ matrix.arch }}.pkg
+            dist/AnycubicUploader-macOS.zip
 
   release:
     needs: [build-windows, build-macos]
@@ -86,6 +109,9 @@ jobs:
         with:
           files: |
             artifacts/anycubic-uploader-windows/AnycubicUploader.exe
-            artifacts/anycubic-uploader-macos/AnycubicUploader-macOS.zip
+            artifacts/anycubic-uploader-windows/AnycubicUploader-Setup.exe
+            artifacts/anycubic-uploader-macos-arm64/AnycubicUploader-macOS.zip
+            artifacts/anycubic-uploader-macos-arm64/AnycubicUploader-macOS-arm64.pkg
+            artifacts/anycubic-uploader-macos-x86_64/AnycubicUploader-macOS-x86_64.pkg
           generate_release_notes: true
           draft: false

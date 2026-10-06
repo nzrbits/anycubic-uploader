@@ -100,3 +100,10 @@ The next attempt uses the replacement. **Upload pending files** retries waiting 
 Open **Settings**, add or remove folders, and click **Save**.
 The app watches files directly inside those folders. It does not scan subfolders.
 File extensions are comma separated, such as `.pm4u, .gcode`, and matching ignores case.
+
+## Why does my system ask about the publisher?
+
+The releases do not have a Windows publisher signature or an Apple Developer ID signature and notarization.
+Windows may show a SmartScreen prompt. Check that the download came from this repository's [Releases](https://github.com/nzrbits/anycubic-uploader/releases).
+On macOS, if the package or app is blocked, open **System Settings → Privacy & Security** and use **Open Anyway** for that download. See [Apple's instructions](https://support.apple.com/en-us/102445).
+The installers do not change your system's security settings.

@@ -65,3 +65,10 @@ pyinstaller packaging/macos.spec
 Build each package on its target OS. Output goes to `dist/`.
 CI builds both packages on Python 3.12 after the tests pass.
 Version tags beginning with `v` run the release workflow.
+
+The release version is in `packaging/version.txt`. The Mac app and both setups read it.
+After building the app, run `packaging/build-windows-installer.ps1` on Windows or `bash packaging/build-macos-installer.sh` on macOS.
+The Windows script downloads and checks the signed Inno Setup compiler when needed. The Mac script uses Apple's `pkgbuild`.
+
+CI installs and reinstalls both setups on disposable runners. Windows CI also uninstalls the app. These checks verify installation paths, application files and preservation of existing settings.
+Mac releases include separate Apple Silicon and Intel packages.

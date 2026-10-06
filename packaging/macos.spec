@@ -1,6 +1,7 @@
 from pathlib import Path
 
 ROOT = Path(SPECPATH).parent
+VERSION = (ROOT / 'packaging' / 'version.txt').read_text().strip()
 
 a = Analysis(
     [str(ROOT / 'tray_app.py')],
@@ -34,5 +35,5 @@ app = BUNDLE(
     name='Anycubic Uploader.app',
     bundle_identifier='com.anycubic.uploader',
     info_plist={'NSHighResolutionCapable': True, 'LSUIElement': True,
-                'CFBundleShortVersionString': '1.1.3', 'CFBundleVersion': '1.1.3'},
+                'CFBundleShortVersionString': VERSION, 'CFBundleVersion': VERSION},
 )
