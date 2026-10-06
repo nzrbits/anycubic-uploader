@@ -13,7 +13,10 @@ from collections.abc import Callable
 from pathlib import Path
 from tkinter import ttk
 
+from PIL import ImageTk
+
 import config
+from notifications import make_icon
 
 _lock = threading.Lock()
 _process: subprocess.Popen | None = None
@@ -59,6 +62,8 @@ def open_settings(on_close: Callable[[], None]) -> bool:
 def main() -> int:
     root = tk.Tk()
     root.title("Anycubic Uploader settings")
+    icons = [ImageTk.PhotoImage(make_icon(size), master=root) for size in (16, 32, 64)]
+    root.iconphoto(True, *icons)
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
     try:

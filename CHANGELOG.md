@@ -6,6 +6,11 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-06
+
+### Fixed
+- The settings window and Windows executable use the Anycubic tray icon.
+
 ## [1.1.0] - 2026-10-06
 
 ### Changed
