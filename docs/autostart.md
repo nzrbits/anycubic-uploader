@@ -1,96 +1,61 @@
-# Autostart Setup
+# Start the uploader at login
 
-Set up the Anycubic Uploader to launch automatically when you log in.
-
----
+Complete token setup before enabling autostart.
 
 ## Windows
 
-1. Press `Win+R`, type `shell:startup`, press Enter
-2. The Startup folder opens in Explorer
-3. Right-click inside → **New → Shortcut**
-4. Target:
+1. Press `Win+R` and enter `shell:startup`.
+2. Create a shortcut in the Startup folder.
+3. For a source checkout, use this target with your checkout path:
+
+   ```text
+   powershell.exe -WindowStyle Hidden -File "D:\Dev\anycubic-uploader\start.ps1"
    ```
-   powershell.exe -WindowStyle Hidden -File "C:\path\to\anycubic-uploader\start.ps1"
-   ```
-   Replace `C:\path\to\anycubic-uploader` with the actual folder path.
-5. Name the shortcut `Anycubic Uploader`
-6. Click **Finish**
 
-The tray icon will appear on every login without a visible window.
+For a standalone build, create a shortcut to `AnycubicUploader.exe` instead.
+Delete the shortcut to disable autostart.
 
----
+## macOS app bundle
 
-## macOS
+Move `Anycubic Uploader.app` to `/Applications` or `~/Applications`.
+Open **System Settings → General → Login Items** and add it.
+Remove the entry there to disable autostart.
 
-Create a Launch Agent that macOS runs at login.
+## macOS source checkout
 
-1. Open Terminal and run:
+Create a Launch Agent. Replace `INSTALL_DIR` with your checkout path:
 
-```bash
-INSTALL_DIR="$HOME/Applications/anycubic-uploader"   # change to your path
+```sh
+INSTALL_DIR="$HOME/Applications/anycubic-uploader"
+DATA_DIR="$HOME/Library/Application Support/AnycubicUploader"
 PLIST="$HOME/Library/LaunchAgents/com.anycubic.uploader.plist"
+mkdir -p "$HOME/Library/LaunchAgents" "$DATA_DIR"
 
 cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>Label</key>
-    <string>com.anycubic.uploader</string>
+    <key>Label</key><string>com.anycubic.uploader</string>
     <key>ProgramArguments</key>
-    <array>
-        <string>$INSTALL_DIR/start.sh</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <false/>
-    <key>StandardOutPath</key>
-    <string>$INSTALL_DIR/watcher.log</string>
-    <key>StandardErrorPath</key>
-    <string>$INSTALL_DIR/watcher.log</string>
+    <array><string>$INSTALL_DIR/start.sh</string></array>
+    <key>RunAtLoad</key><true/>
+    <key>EnvironmentVariables</key>
+    <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+    <key>StandardOutPath</key><string>$DATA_DIR/launch.stdout.log</string>
+    <key>StandardErrorPath</key><string>$DATA_DIR/launch.stderr.log</string>
 </dict>
 </plist>
 EOF
 
 chmod +x "$INSTALL_DIR/start.sh"
-launchctl load "$PLIST"
-echo "Autostart configured."
+launchctl bootstrap "gui/$(id -u)" "$PLIST"
 ```
 
-2. To disable autostart later:
-```bash
-launchctl unload ~/Library/LaunchAgents/com.anycubic.uploader.plist
+To disable it:
+
+```sh
+launchctl bootout "gui/$(id -u)" ~/Library/LaunchAgents/com.anycubic.uploader.plist
 ```
 
-3. To check if it's running:
-```bash
-launchctl list | grep anycubic
-```
-
----
-
-## macOS — using a pre-built .app
-
-If you downloaded the `Anycubic Uploader.app`:
-
-1. Move it to `/Applications` or `~/Applications`
-2. Open **System Settings → General → Login Items**
-3. Click `+` and select `Anycubic Uploader.app`
-
-The app will launch at login and live only in the menu bar (no Dock icon).
-
----
-
-## Disable autostart
-
-**Windows:** Delete the shortcut from the Startup folder (`shell:startup`).
-
-**macOS (Launch Agent):**
-```bash
-launchctl unload ~/Library/LaunchAgents/com.anycubic.uploader.plist
-```
-
-**macOS (Login Items):** System Settings → General → Login Items → select and press `−`.
+Upload logs remain in the settings folder. Launcher output goes to the two `launch.*.log` files.

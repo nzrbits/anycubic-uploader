@@ -6,6 +6,26 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-06
+
+### Changed
+- The tray menu offers a settings window and a manual pending-upload trigger.
+- Events, startup scans and bulk uploads use one queue and a shared SQLite upload record.
+- Settings and logs use a persistent user data folder. Existing source settings migrate once.
+- Token setup uses explicit paste entry and runs on first launch of packaged builds.
+- README, setup instructions and code comments use shorter, concrete wording.
+
+### Fixed
+- Failed older files remain eligible when newer uploads succeed.
+- Duplicate events and concurrent uploader processes share upload ownership.
+- Growing files are deferred; renamed and modified files reach the queue.
+- Network failures release cloud reservations where possible. Finalization failures no longer count as success.
+- Settings updates validate field types, preserve concurrent edits and replace files atomically.
+- Missing folders can be removed. Failed settings writes undo newly added watches.
+- Token setup no longer closes browser processes or guesses tokens from browser database files.
+- Launchers retry failed dependency installs and detect changed requirements.
+- Windows dialogs queue callbacks until Tk is ready. Tests and package builds run before releases.
+
 ### Added
 - **Test suite** — pytest tests for config, uploader, token extraction, bulk upload and tray app, with macOS-only tests for the FSEvents watcher, notifications and Chrome profile paths
 - **CI workflow** — runs the tests on macOS and Windows for pull requests and pushes to `master`

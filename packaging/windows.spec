@@ -1,53 +1,28 @@
-# PyInstaller spec — Windows single-file executable
-# Build: pyinstaller packaging/windows.spec
-
-import sys
 from pathlib import Path
 
-block_cipher = None
+ROOT = Path(SPECPATH).parent
 
 a = Analysis(
-    [str(Path('..') / 'tray_app.py')],
-    pathex=[str(Path('.').parent)],
+    [str(ROOT / 'tray_app.py')],
+    pathex=[str(ROOT)],
     binaries=[],
     datas=[],
-    hiddenimports=[
-        'pystray._win32',
-        'PIL._tkinter_finder',
-        'watchdog.observers',
-        'watchdog.observers.winapi',
-    ],
+    hiddenimports=['pystray._win32', 'PIL._tkinter_finder', 'watchdog.observers.read_directory_changes'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
+pyz = PYZ(a.pure)
 exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
+    pyz, a.scripts, a.binaries, a.datas, [],
     name='AnycubicUploader',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
+    console=False,
     runtime_tmpdir=None,
-    console=False,      # no console window
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=None,
 )

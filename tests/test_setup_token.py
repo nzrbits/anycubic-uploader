@@ -1,54 +1,58 @@
-from __future__ import annotations
+from unittest.mock import Mock
 
-import sys
-
-import pytest
-
+import config
 import setup_token
-
-JWT = "eyJhbGciOiJIUzI1NiJ9." + "a" * 60 + "." + "b" * 40
-OTHER = "eyJ" + "z" * 100
+import tray_app
 
 
-def test_token_found_next_to_xx_token_key(tmp_path):
-    (tmp_path / "000003.log").write_bytes(
-        b"\x00junk" + OTHER.encode() + b"\x00_https://cloud-universe.anycubic.com\x00XX-Token\x01" + JWT.encode() + b"\x00"
+def test_prompt_saves_token_without_printing_it(monkeypatch, capsys):
+    root = Mock()
+    monkeypatch.setattr(setup_token.tk, "Tk", lambda: root)
+    monkeypatch.setattr(setup_token.mb, "showinfo", Mock())
+    monkeypatch.setattr(
+        setup_token.sd, "askstring", lambda *a, **kw: "  secret-token  "
     )
-    assert setup_token._find_token_in_leveldb(tmp_path) == JWT
+    assert setup_token.prompt_token()
+    assert config.load_token() == "secret-token"
+    assert "secret-token" not in capsys.readouterr().out
+    root.destroy.assert_called_once()
 
 
-def test_falls_back_to_first_jwt_in_anycubic_file(tmp_path):
-    (tmp_path / "000005.ldb").write_bytes(b"anycubic\x00" + JWT.encode())
-    assert setup_token._find_token_in_leveldb(tmp_path) == JWT
+def test_cancel_keeps_existing_token(monkeypatch):
+    config.save_token("original")
+    root = Mock()
+    monkeypatch.setattr(setup_token.tk, "Tk", lambda: root)
+    monkeypatch.setattr(setup_token.mb, "showinfo", Mock())
+    monkeypatch.setattr(setup_token.sd, "askstring", lambda *a, **kw: None)
+    assert not setup_token.prompt_token()
+    assert config.load_token() == "original"
+    root.destroy.assert_called_once()
 
 
-def test_ignores_files_without_anycubic_marker(tmp_path):
-    (tmp_path / "000001.log").write_bytes(b"other-site\x00" + JWT.encode())
-    assert setup_token._find_token_in_leveldb(tmp_path) is None
+def test_packaged_entry_offers_setup_without_token(monkeypatch):
+    prompt = Mock(return_value=True)
+    monkeypatch.setattr(tray_app, "prompt_token", prompt)
+    assert tray_app.ensure_token()
+    prompt.assert_called_once()
 
 
-def test_ignores_non_leveldb_files(tmp_path):
-    (tmp_path / "LOCK").write_bytes(b"XX-Token\x00" + JWT.encode())
-    (tmp_path / "MANIFEST-000001").write_bytes(b"XX-Token\x00" + JWT.encode())
-    assert setup_token._find_token_in_leveldb(tmp_path) is None
+def test_existing_token_skips_setup(monkeypatch):
+    config.save_token("existing")
+    prompt = Mock()
+    monkeypatch.setattr(tray_app, "prompt_token", prompt)
+    assert tray_app.ensure_token()
+    prompt.assert_not_called()
 
 
-def test_live_chrome_missing_profile_returns_none(tmp_path):
-    assert setup_token._extract_from_live_chrome(tmp_path / "nope") is None
-
-
-@pytest.mark.skipif(sys.platform != "darwin", reason="macOS path layout")
-def test_chrome_leveldb_path_on_macos():
-    p = setup_token._chrome_leveldb_mac()
-    assert p.parts[-6:] == ("Application Support", "Google", "Chrome",
-                            "Default", "Local Storage", "leveldb")
-
-
-@pytest.mark.skipif(sys.platform != "darwin", reason="macOS path layout")
-def test_find_chrome_mac_matches_filesystem():
-    from pathlib import Path
-    found = setup_token._find_chrome_mac()
-    if found is None:
-        assert not Path("/Applications/Google Chrome.app").exists()
-    else:
-        assert Path(found).is_file()
+def test_corrupt_config_is_reported_and_preserved(monkeypatch):
+    config.CONFIG_FILE.write_text("broken", encoding="utf-8")
+    root = Mock()
+    error = Mock()
+    prompt = Mock()
+    monkeypatch.setattr(tray_app.tk, "Tk", lambda: root)
+    monkeypatch.setattr(tray_app.mb, "showerror", error)
+    monkeypatch.setattr(tray_app, "prompt_token", prompt)
+    assert not tray_app.ensure_token()
+    error.assert_called_once()
+    prompt.assert_not_called()
+    assert config.CONFIG_FILE.read_text() == "broken"

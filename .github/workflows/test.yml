@@ -33,3 +33,15 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -rs
+
+      - name: Install build tools
+        if: matrix.python-version == '3.12'
+        run: pip install "pyinstaller>=6,<7"
+
+      - name: Build Windows executable
+        if: matrix.os == 'windows-latest' && matrix.python-version == '3.12'
+        run: pyinstaller packaging/windows.spec
+
+      - name: Build macOS app
+        if: matrix.os == 'macos-latest' && matrix.python-version == '3.12'
+        run: pyinstaller packaging/macos.spec

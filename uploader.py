@@ -1,172 +1,172 @@
-"""
-Anycubic Cloud upload logic and API helpers.
+"""Anycubic API calls and the reserve, transfer, register, finalize transaction."""
 
-Upload flow (reverse-engineered from anycubic-cloud-api library):
-  1. POST /v2/cloud_storage/lockStorageSpace  -> get preSignUrl + lock_id
-  2. PUT  preSignUrl (AWS S3)                  -> upload file bytes
-  3. POST /v2/profile/newUploadFile            -> claim upload, get cloud_file_id
-  4. POST /v2/cloud_storage/unlockStorageSpace -> finalise
-"""
 from __future__ import annotations
 
 import hashlib
 import json
 import logging
-import sys
+import os
+import threading
 import time
 import uuid
 from pathlib import Path
 
 import requests
 
-import config as cfg
-
-# ── API constants ─────────────────────────────────────────────────────────────
-API_BASE           = "https://cloud-universe.anycubic.com/p/p/workbench/api"
-FILE_STABLE_WAIT   = 3
+API_BASE = "https://cloud-universe.anycubic.com/p/p/workbench/api"
+FILE_STABLE_WAIT = 3
 FILE_STABLE_CHECKS = 5
 _AID = "f9b3528877c94d5c9c5af32245db46ef"
 _SEC = "0cf75926606049a3937f56b0373b99fb"
 _VER = "1.0.0"
-
-# ── Logging ───────────────────────────────────────────────────────────────────
-_log_file = Path(__file__).parent / "watcher.log"
-
-_handlers: list[logging.Handler] = [logging.FileHandler(_log_file, encoding="utf-8")]
-if sys.stdout is not None:
-    try:
-        _handlers.append(
-            logging.StreamHandler(
-                open(sys.stdout.fileno(), mode="w", encoding="utf-8", closefd=False)
-            )
-        )
-    except Exception:
-        pass
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(message)s",
-    handlers=_handlers,
-)
 log = logging.getLogger(__name__)
 
-STATE_FILE = Path(__file__).parent / "last_upload.json"
 
-# Re-export for backward compatibility with upload_existing.py
-WATCH_EXTENSIONS = cfg.get_watch_extensions()
-
-
-def load_token() -> str:
-    return cfg.load_token()
+class ApiError(RuntimeError):
+    pass
 
 
-# ── HTTP helpers ──────────────────────────────────────────────────────────────
-
-def _make_headers(token: str) -> dict:
-    ts    = str(int(time.time() * 1000))
+def _make_headers(token: str) -> dict[str, str]:
+    ts = str(int(time.time() * 1000))
     nonce = str(uuid.uuid1())
-    sig   = hashlib.md5(f"{_AID}{ts}{_VER}{_SEC}{nonce}{_AID}".encode()).hexdigest()
+    sig = hashlib.md5(f"{_AID}{ts}{_VER}{_SEC}{nonce}{_AID}".encode()).hexdigest()
     return {
-        "XX-Token":       token,
+        "XX-Token": token,
         "XX-Device-Type": "web",
-        "XX-IS-CN":       "2",
-        "XX-Timestamp":   ts,
-        "XX-Nonce":       nonce,
-        "XX-Version":     _VER,
-        "XX-Signature":   sig,
-        "Content-Type":   "application/json",
-        "User-Agent":     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer":        "https://cloud-universe.anycubic.com/file",
-        "Origin":         "https://cloud-universe.anycubic.com",
+        "XX-IS-CN": "2",
+        "XX-Timestamp": ts,
+        "XX-Nonce": nonce,
+        "XX-Version": _VER,
+        "XX-Signature": sig,
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://cloud-universe.anycubic.com/file",
+        "Origin": "https://cloud-universe.anycubic.com",
     }
 
 
 def _api_post(token: str, path: str, payload: dict, timeout: int = 30) -> dict:
-    r = requests.post(
+    response = requests.post(
         f"{API_BASE}{path}",
         headers=_make_headers(token),
         data=json.dumps(payload),
         timeout=timeout,
     )
-    r.raise_for_status()
-    return r.json()
+    response.raise_for_status()
+    result = response.json()
+    if not isinstance(result, dict) or result.get("code") != 1:
+        raise ApiError(f"{path} rejected the request")
+    return result
 
 
-# ── File helpers ──────────────────────────────────────────────────────────────
+def _data(response: dict, *fields: str) -> dict:
+    data = response.get("data")
+    if not isinstance(data, dict) or any(data.get(field) is None for field in fields):
+        raise ApiError("API response is missing required fields")
+    return data
 
-def wait_until_stable(path: Path) -> bool:
-    """Poll until the file size stops changing, returns False if file vanishes."""
-    time.sleep(FILE_STABLE_WAIT)
-    prev = -1
+
+def _signature(stat: os.stat_result) -> tuple[int, int]:
+    return stat.st_size, stat.st_mtime_ns
+
+
+def wait_until_stable(path: Path, cancel: threading.Event | None = None) -> bool:
+    def pause(seconds: float) -> bool:
+        if cancel is not None:
+            return cancel.wait(seconds)
+        time.sleep(seconds)
+        return False
+
+    if pause(FILE_STABLE_WAIT):
+        return False
+    previous = None
     for _ in range(FILE_STABLE_CHECKS):
         try:
-            sz = path.stat().st_size
+            current = _signature(path.stat())
         except OSError:
             return False
-        if sz == prev and sz > 0:
+        if current == previous and current[0] > 0:
             return True
-        prev = sz
-        time.sleep(1)
-    return prev > 0
+        previous = current
+        if pause(1):
+            return False
+    return False
 
-
-# ── Upload ────────────────────────────────────────────────────────────────────
 
 def upload(path: Path, token: str) -> bool:
-    size_mb = path.stat().st_size / 1_048_576
-    log.info("[1/4] Reserving cloud storage for %s (%.1f MB)...", path.name, size_mb)
-
-    lock_resp = _api_post(token, "/v2/cloud_storage/lockStorageSpace", {
-        "size":         path.stat().st_size,
-        "name":         path.name,
-        "is_temp_file": 0,
-    })
-    lock_data = lock_resp.get("data")
-    if not lock_data or "preSignUrl" not in lock_data:
-        log.error("lockStorageSpace failed: code=%s data=%s", lock_resp.get("code"), lock_data)
+    lock_id = None
+    completed = False
+    try:
+        with path.open("rb") as stream:
+            original = _signature(os.fstat(stream.fileno()))
+            log.info(
+                "Reserving storage for %s (%.1f MB)", path.name, original[0] / 1_048_576
+            )
+            reservation = _data(
+                _api_post(
+                    token,
+                    "/v2/cloud_storage/lockStorageSpace",
+                    {
+                        "size": original[0],
+                        "name": path.name,
+                        "is_temp_file": 0,
+                    },
+                ),
+                "id",
+            )
+            lock_id = reservation["id"]
+            url = reservation.get("preSignUrl")
+            if not isinstance(url, str) or not url.startswith("https://"):
+                raise ApiError("API returned an invalid upload URL")
+            log.info("Transferring %s", path.name)
+            response = requests.put(url, data=stream, timeout=600)
+            response.raise_for_status()
+            if (
+                _signature(os.fstat(stream.fileno())) != original
+                or _signature(path.stat()) != original
+            ):
+                raise ApiError("File changed during upload")
+        _data(
+            _api_post(
+                token, "/v2/profile/newUploadFile", {"user_lock_space_id": lock_id}
+            ),
+            "id",
+        )
+        _api_post(
+            token,
+            "/v2/cloud_storage/unlockStorageSpace",
+            {"id": lock_id, "is_delete_cos": 0},
+        )
+        completed = True
+        log.info("Uploaded %s", path.name)
+        return True
+    except (requests.RequestException, OSError, ValueError, ApiError):
+        log.exception("Upload failed for %s", path.name)
         return False
-
-    lock_id     = lock_data["id"]
-    presign_url = lock_data["preSignUrl"]
-
-    log.info("[2/4] S3-Upload...")
-    with open(path, "rb") as f:
-        put = requests.put(presign_url, data=f, timeout=600)
-    if put.status_code != 200:
-        log.error("S3-Upload failed: HTTP %s", put.status_code)
-        _api_post(token, "/v2/cloud_storage/unlockStorageSpace", {"id": lock_id, "is_delete_cos": 1})
-        return False
-
-    log.info("[3/4] Registering file in cloud...")
-    claim_resp = _api_post(token, "/v2/profile/newUploadFile", {"user_lock_space_id": lock_id})
-    if not claim_resp.get("data") or "id" not in claim_resp.get("data", {}):
-        log.error("claim failed: code=%s msg=%s", claim_resp.get("code"), claim_resp.get("msg"))
-        _api_post(token, "/v2/cloud_storage/unlockStorageSpace", {"id": lock_id, "is_delete_cos": 1})
-        return False
-
-    log.info("[4/4] Finalizing...")
-    _api_post(token, "/v2/cloud_storage/unlockStorageSpace", {"id": lock_id, "is_delete_cos": 0})
-    log.info("Upload complete: %s", path.name)
-    return True
+    finally:
+        if lock_id is not None and not completed:
+            try:
+                _api_post(
+                    token,
+                    "/v2/cloud_storage/unlockStorageSpace",
+                    {"id": lock_id, "is_delete_cos": 1},
+                )
+            except (requests.RequestException, OSError, ValueError, ApiError):
+                log.exception("Could not release cloud reservation for %s", path.name)
 
 
-# ── State tracking ────────────────────────────────────────────────────────────
-
-def load_last_upload_time() -> float:
-    if STATE_FILE.exists():
+def free_storage(token: str) -> str | None:
+    for endpoint in ("/v2/cloud_storage/storageInfo", "/v2/profile/storageInfo"):
         try:
-            return json.loads(STATE_FILE.read_text(encoding="utf-8")).get("ts", 0.0)
-        except Exception:
-            pass
-    return 0.0
-
-
-def save_last_upload_time(ts: float) -> None:
-    STATE_FILE.write_text(json.dumps({"ts": ts}), encoding="utf-8")
-
-
-def upload_and_track(path: Path, token: str) -> bool:
-    ok = upload(path, token)
-    if ok:
-        save_last_upload_time(path.stat().st_mtime)
-    return ok
+            data = _data(_api_post(token, endpoint, {}))
+            total = data.get("total_size", data.get("totalSize", 0))
+            used = data.get("used_size", data.get("usedSize", 0))
+            if (
+                isinstance(total, (int, float))
+                and isinstance(used, (int, float))
+                and total > 0
+            ):
+                return f"{(total - used) / 1_073_741_824:.1f} GB free"
+        except (requests.RequestException, ValueError, ApiError):
+            log.debug("Storage information unavailable", exc_info=True)
+    return None

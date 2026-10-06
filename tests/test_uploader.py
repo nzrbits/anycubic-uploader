@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 
 import pytest
 
@@ -17,7 +16,10 @@ def test_headers_carry_token_and_valid_signature():
 
 
 def test_headers_use_fresh_nonce():
-    assert uploader._make_headers("t")["XX-Nonce"] != uploader._make_headers("t")["XX-Nonce"]
+    assert (
+        uploader._make_headers("t")["XX-Nonce"]
+        != uploader._make_headers("t")["XX-Nonce"]
+    )
 
 
 def test_upload_happy_path_runs_all_four_steps(tmp_path, fake_api):
@@ -63,7 +65,11 @@ def test_upload_releases_lock_when_s3_fails(tmp_path, fake_api):
 def test_upload_releases_lock_when_claim_fails(tmp_path, fake_api):
     f = tmp_path / "a.pm4u"
     f.write_bytes(b"x")
-    fake_api.replies["/v2/profile/newUploadFile"] = {"code": 0, "msg": "nope", "data": None}
+    fake_api.replies["/v2/profile/newUploadFile"] = {
+        "code": 0,
+        "msg": "nope",
+        "data": None,
+    }
 
     assert uploader.upload(f, "tok") is False
     assert fake_api.calls[-1][2] == {"id": 42, "is_delete_cos": 1}
@@ -71,34 +77,12 @@ def test_upload_releases_lock_when_claim_fails(tmp_path, fake_api):
 
 def test_api_post_raises_on_http_error(monkeypatch):
     from conftest import FakeResponse
-    monkeypatch.setattr(uploader.requests, "post",
-                        lambda *a, **k: FakeResponse(status_code=401))
+
+    monkeypatch.setattr(
+        uploader.requests, "post", lambda *a, **k: FakeResponse(status_code=401)
+    )
     with pytest.raises(uploader.requests.HTTPError):
         uploader._api_post("tok", "/x", {})
-
-
-def test_upload_and_track_saves_mtime_only_on_success(tmp_path, fake_api):
-    f = tmp_path / "a.pm4u"
-    f.write_bytes(b"x")
-
-    fake_api.put_status["code"] = 500
-    assert uploader.upload_and_track(f, "tok") is False
-    assert uploader.load_last_upload_time() == 0.0
-
-    fake_api.put_status["code"] = 200
-    assert uploader.upload_and_track(f, "tok") is True
-    assert uploader.load_last_upload_time() == f.stat().st_mtime
-
-
-def test_last_upload_time_survives_broken_state_file():
-    uploader.STATE_FILE.write_text("garbage", encoding="utf-8")
-    assert uploader.load_last_upload_time() == 0.0
-
-
-def test_last_upload_time_roundtrip():
-    uploader.save_last_upload_time(1700000000.5)
-    assert json.loads(uploader.STATE_FILE.read_text())["ts"] == 1700000000.5
-    assert uploader.load_last_upload_time() == 1700000000.5
 
 
 @pytest.fixture
@@ -129,9 +113,104 @@ def test_wait_until_stable_waits_for_growth_to_stop(tmp_path, monkeypatch):
 
     def sleep(_):
         chunk = next(grow, None)
-        if chunk is not None:
+        if chunk is not None and f.read_bytes() != chunk:
             f.write_bytes(chunk)
 
     monkeypatch.setattr(uploader.time, "sleep", sleep)
     assert uploader.wait_until_stable(f) is True
     assert f.stat().st_size == 3
+
+
+def test_continuously_growing_file_is_not_stable(tmp_path, monkeypatch):
+    path = tmp_path / "growing.pm4u"
+    path.write_bytes(b"x")
+
+    def grow(_):
+        with path.open("ab") as stream:
+            stream.write(b"x")
+
+    monkeypatch.setattr(uploader.time, "sleep", grow)
+    assert not uploader.wait_until_stable(path)
+
+
+@pytest.mark.parametrize("stage", ["put", "claim", "finalize"])
+def test_network_errors_release_reservation(tmp_path, fake_api, monkeypatch, stage):
+    path = tmp_path / "part.pm4u"
+    path.write_bytes(b"x")
+    if stage == "put":
+        monkeypatch.setattr(
+            uploader.requests,
+            "put",
+            lambda *a, **kw: (_ for _ in ()).throw(uploader.requests.Timeout()),
+        )
+    else:
+        original = uploader._api_post
+
+        def fail(token, endpoint, payload):
+            if (stage == "claim" and endpoint.endswith("newUploadFile")) or (
+                stage == "finalize"
+                and endpoint.endswith("unlockStorageSpace")
+                and payload["is_delete_cos"] == 0
+            ):
+                raise uploader.requests.ConnectionError("offline")
+            return original(token, endpoint, payload)
+
+        monkeypatch.setattr(uploader, "_api_post", fail)
+    assert not uploader.upload(path, "mock")
+    assert fake_api.calls[-1][2] == {"id": 42, "is_delete_cos": 1}
+
+
+def test_finalization_rejection_is_failure(tmp_path, fake_api):
+    path = tmp_path / "part.pm4u"
+    path.write_bytes(b"x")
+    fake_api.replies["/v2/cloud_storage/unlockStorageSpace"] = {"code": 0}
+    assert not uploader.upload(path, "mock")
+    assert fake_api.calls[-1][2] == {"id": 42, "is_delete_cos": 1}
+
+
+def test_missing_upload_url_releases_known_reservation(tmp_path, fake_api):
+    path = tmp_path / "part.pm4u"
+    path.write_bytes(b"x")
+    fake_api.replies["/v2/cloud_storage/lockStorageSpace"] = {
+        "code": 1,
+        "data": {"id": 42},
+    }
+    assert not uploader.upload(path, "mock")
+    assert fake_api.calls[-1][2] == {"id": 42, "is_delete_cos": 1}
+
+
+def test_changed_file_is_not_registered(tmp_path, fake_api, monkeypatch):
+    from conftest import FakeResponse
+
+    path = tmp_path / "part.pm4u"
+    path.write_bytes(b"x")
+
+    def put(*args, **kwargs):
+        path.write_bytes(b"different")
+        return FakeResponse()
+
+    monkeypatch.setattr(uploader.requests, "put", put)
+    assert not uploader.upload(path, "mock")
+    assert not any(
+        endpoint.endswith("newUploadFile")
+        for method, endpoint, payload in fake_api.calls
+    )
+
+
+@pytest.mark.parametrize("response", [{"code": 0}, [], {"data": {}}])
+def test_api_rejects_invalid_response(monkeypatch, response):
+    from conftest import FakeResponse
+
+    monkeypatch.setattr(
+        uploader.requests, "post", lambda *a, **kw: FakeResponse(response)
+    )
+    with pytest.raises(uploader.ApiError):
+        uploader._api_post("mock", "/test", {})
+
+
+def test_free_storage_formats_gb(fake_api):
+    fake_api.replies["/v2/cloud_storage/storageInfo"] = {
+        "code": 1,
+        "data": {"total_size": 8 * 1_073_741_824, "used_size": 3 * 1_073_741_824},
+    }
+    assert uploader.free_storage("mock") == "5.0 GB free"
