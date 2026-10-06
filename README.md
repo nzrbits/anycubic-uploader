@@ -34,8 +34,8 @@ For Python 3.12, that is `brew install python-tk@3.12`.
 ## Use a standalone app
 
 Download the Windows executable or macOS app from [Releases](https://github.com/nzrbits/anycubic-uploader/releases).
-The packaged app includes Python. Current source builds offer token setup on first launch.
-Older releases may still require the separate setup script.
+The packaged app includes Python. Version 1.1.0 offers token setup on first launch.
+Version 1.0.0 still requires the separate setup script.
 
 ## Enter your token
 
