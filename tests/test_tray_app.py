@@ -11,6 +11,8 @@ from watchdog.events import (
 import config
 import tray_app
 import uploader
+from upload_queue import Result
+from upload_state import FileVersion
 
 
 def test_handler_submits_created_moved_and_modified_files(tmp_path):
@@ -72,6 +74,53 @@ def test_real_observer_detects_file(tmp_path, monkeypatch, fake_api):
     finally:
         manager.stop()
     assert len([call for call in fake_api.calls if call[0] == "PUT"]) == 1
+
+
+def test_quit_cancels_active_transfer_and_keeps_file_retryable(
+    tmp_path, monkeypatch, fake_api
+):
+    from conftest import FakeResponse
+
+    path = tmp_path / "part.pm4u"
+    path.write_bytes(b"model data")
+    config.save({"token": "mock", "watch_folders": [str(tmp_path)]})
+    monkeypatch.setattr(uploader, "wait_until_stable", lambda path, cancel=None: True)
+    entered = threading.Event()
+    notifier = Mock()
+    manager = tray_app.WatcherManager(notifier)
+
+    def put(url, data, timeout):
+        assert data.read(2) == b"mo"
+        entered.set()
+        assert manager._uploads._stop.wait(5)
+        data.read(2)
+        return FakeResponse()
+
+    monkeypatch.setattr(uploader.requests, "put", put)
+    try:
+        assert manager._uploads.submit(path)
+        assert entered.wait(5)
+        manager.stop()
+        assert not manager._uploads._worker.is_alive()
+        assert fake_api.calls[-1][2] == {"id": 42, "is_delete_cos": 1}
+        assert manager._uploads._ledger.claim(FileVersion.read(path))
+        assert [call.args[0] for call in notifier.notify.call_args_list] == [
+            "Uploading"
+        ]
+    finally:
+        manager.stop()
+
+
+def test_shutdown_suppresses_storage_requests_and_failure_toasts(tmp_path, monkeypatch):
+    storage = Mock()
+    notifier = Mock()
+    monkeypatch.setattr(tray_app, "free_storage", storage)
+    manager = tray_app.WatcherManager(notifier)
+    manager.stop()
+    manager._finished(tmp_path / "part.pm4u", Result.UPLOADED)
+    manager._finished(tmp_path / "part.pm4u", Result.FAILED)
+    storage.assert_not_called()
+    notifier.notify.assert_not_called()
 
 
 def _walk(menu):

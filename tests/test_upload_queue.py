@@ -23,7 +23,9 @@ def test_older_failed_file_survives_newer_success(ready_files, monkeypatch):
         os.utime(path, (timestamp, timestamp))
     attempts = []
     monkeypatch.setattr(
-        uploader, "upload", lambda path, token: attempts.append(path.name) or path == b
+        uploader,
+        "upload",
+        lambda path, token, cancel: attempts.append(path.name) or path == b,
     )
     first = UploadQueue(lambda *args: None)
     try:
@@ -48,7 +50,7 @@ def test_duplicates_and_concurrent_process_claims_upload_once(ready_files, monke
     entered, release = threading.Event(), threading.Event()
     attempts = []
 
-    def upload(path, token):
+    def upload(path, token, cancel):
         attempts.append(path)
         entered.set()
         assert release.wait(5)
@@ -77,7 +79,9 @@ def test_changed_version_is_uploaded_again(ready_files, monkeypatch):
     path.write_bytes(b"x")
     attempts = []
     monkeypatch.setattr(
-        uploader, "upload", lambda path, token: attempts.append(path.name) or True
+        uploader,
+        "upload",
+        lambda path, token, cancel: attempts.append(path.name) or True,
     )
     worker = UploadQueue(lambda *args: None)
     try:
@@ -96,7 +100,7 @@ def test_queue_reads_renewed_token(ready_files, monkeypatch):
     path.write_bytes(b"x")
     tokens = []
     monkeypatch.setattr(
-        uploader, "upload", lambda path, token: tokens.append(token) or False
+        uploader, "upload", lambda path, token, cancel: tokens.append(token) or False
     )
     worker = UploadQueue(lambda *args: None)
     try:
@@ -150,7 +154,7 @@ def test_missing_token_defers_silently_and_saved_token_resumes(
         config.save_token("saved")
         assert worker.submit(path)
         worker.wait()
-        upload.assert_called_once_with(path, "saved")
+        upload.assert_called_once_with(path, "saved", worker._stop)
         started.assert_called_once_with(path)
         assert results == [Result.DEFERRED, Result.DEFERRED, Result.UPLOADED]
     finally:

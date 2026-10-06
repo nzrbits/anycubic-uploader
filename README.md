@@ -63,7 +63,7 @@ Successful uploads are recorded by file path, size and modification time.
 An unchanged file is skipped on later scans. A failed file stays eligible even when newer files upload successfully.
 The tray app and bulk command share this record to avoid uploading the same version concurrently.
 
-Quitting stops new work and waits for the current transfer.
+Quitting stops new work, cancels the current transfer and releases its cloud reservation. An in-flight network request may take a few seconds to return.
 Files left in the queue are found again on the next launch.
 After a forced exit, an unfinished upload can be retried once its 20-minute reservation in the local record expires.
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import logging
 import os
@@ -24,6 +25,21 @@ log = logging.getLogger(__name__)
 
 class ApiError(RuntimeError):
     pass
+
+
+class UploadCancelled(Exception):
+    pass
+
+
+class _UploadStream(io.BufferedReader):
+    def __init__(self, path: Path, cancel: threading.Event | None):
+        super().__init__(io.FileIO(path, "rb"))
+        self._cancel = cancel
+
+    def read(self, size: int = -1) -> bytes:
+        if self._cancel is not None and self._cancel.is_set():
+            raise UploadCancelled
+        return super().read(size)
 
 
 def _make_headers(token: str) -> dict[str, str]:
@@ -93,11 +109,13 @@ def wait_until_stable(path: Path, cancel: threading.Event | None = None) -> bool
     return False
 
 
-def upload(path: Path, token: str) -> bool:
+def upload(path: Path, token: str, cancel: threading.Event | None = None) -> bool:
     lock_id = None
     completed = False
     try:
-        with path.open("rb") as stream:
+        if cancel is not None and cancel.is_set():
+            return False
+        with _UploadStream(path, cancel) as stream:
             original = _signature(os.fstat(stream.fileno()))
             log.info(
                 "Reserving storage for %s (%.1f MB)", path.name, original[0] / 1_048_576
@@ -115,12 +133,16 @@ def upload(path: Path, token: str) -> bool:
                 "id",
             )
             lock_id = reservation["id"]
+            if cancel is not None and cancel.is_set():
+                raise UploadCancelled
             url = reservation.get("preSignUrl")
             if not isinstance(url, str) or not url.startswith("https://"):
                 raise ApiError("API returned an invalid upload URL")
             log.info("Transferring %s", path.name)
-            response = requests.put(url, data=stream, timeout=600)
+            response = requests.put(url, data=stream, timeout=(10, 15))
             response.raise_for_status()
+            if cancel is not None and cancel.is_set():
+                raise UploadCancelled
             if (
                 _signature(os.fstat(stream.fileno())) != original
                 or _signature(path.stat()) != original
@@ -140,6 +162,9 @@ def upload(path: Path, token: str) -> bool:
         completed = True
         log.info("Uploaded %s", path.name)
         return True
+    except UploadCancelled:
+        log.info("Cancelled upload for %s", path.name)
+        return False
     except (requests.RequestException, OSError, ValueError, ApiError):
         log.exception("Upload failed for %s", path.name)
         return False
@@ -150,6 +175,7 @@ def upload(path: Path, token: str) -> bool:
                     token,
                     "/v2/cloud_storage/unlockStorageSpace",
                     {"id": lock_id, "is_delete_cos": 1},
+                    timeout=5 if cancel is not None and cancel.is_set() else 30,
                 )
             except (requests.RequestException, OSError, ValueError, ApiError):
                 log.exception("Could not release cloud reservation for %s", path.name)

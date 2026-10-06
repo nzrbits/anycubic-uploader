@@ -16,7 +16,7 @@ def test_bulk_uses_shared_state_and_retries_failed_files(tmp_path, monkeypatch, 
     monkeypatch.setattr(uploader, "wait_until_stable", lambda path, cancel=None: True)
     seen = []
 
-    def attempt(path, token):
+    def attempt(path, token, cancel):
         seen.append(path.name)
         return path.name != "a.pm4u"
 

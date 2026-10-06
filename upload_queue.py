@@ -89,9 +89,12 @@ class UploadQueue:
     def wait(self) -> None:
         self._queue.join()
 
-    def stop(self) -> None:
+    def cancel(self) -> None:
         with self._lock:
             self._stop.set()
+
+    def stop(self) -> None:
+        self.cancel()
         self._worker.join()
 
     def _process(self, path: Path) -> Result:
@@ -115,7 +118,7 @@ class UploadQueue:
         try:
             with self._ledger.heartbeat(version):
                 self._on_start(path)
-                success = uploader.upload(path, token)
+                success = uploader.upload(path, token, self._stop)
                 if success and FileVersion.read(path) != version:
                     success = False
             return Result.UPLOADED if success else Result.FAILED
