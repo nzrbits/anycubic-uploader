@@ -22,7 +22,7 @@ from notifications import IS_MAC, IS_WIN, NotificationManager, make_icon
 from settings_dialog import open_settings
 from storage import DATA_DIR, configure_logging
 from upload_queue import Result, UploadQueue
-from uploader import free_storage, log
+from uploader import free_storage
 
 APP = "Anycubic Uploader"
 FAQ_URL = "https://github.com/nzrbits/anycubic-uploader/blob/master/docs/faq.md"
@@ -79,7 +79,7 @@ class WatcherManager:
             UploadHandler(self._uploads), str(folder), recursive=False
         )
         self._watches[folder] = watch
-        log.info("Watching %s", folder)
+        logger.info("Watching %s", folder)
 
     def _sync_watches(self) -> None:
         with self._lock:
@@ -94,7 +94,7 @@ class WatcherManager:
                     try:
                         self._schedule(folder)
                     except OSError:
-                        log.warning("Cannot watch %s", folder, exc_info=True)
+                        logger.warning("Cannot watch %s", folder, exc_info=True)
 
     def _scan_loop(self) -> None:
         while not self._stop.is_set():

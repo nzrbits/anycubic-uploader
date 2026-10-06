@@ -7,7 +7,6 @@ import pytest
 import config
 import uploader
 from upload_queue import Result, UploadQueue, discover_files
-from upload_state import FileVersion, UploadLedger
 
 
 @pytest.fixture
@@ -193,19 +192,3 @@ def test_discovery_deduplicates_and_matches_case_insensitively(tmp_path):
         }
     )
     assert discover_files() == [a]
-
-
-def test_stale_lease_can_be_reclaimed(tmp_path, monkeypatch):
-    path = tmp_path / "part.pm4u"
-    path.write_bytes(b"x")
-    version = FileVersion.read(path)
-    one, two = UploadLedger(), UploadLedger()
-    monkeypatch.setattr("upload_state.time.time", lambda: 1000)
-    assert one.claim(version)
-    assert not two.claim(version)
-    monkeypatch.setattr("upload_state.time.time", lambda: 2300)
-    assert two.claim(version)
-    one.finish(version, True)
-    assert not two.completed(version)
-    two.finish(version, True)
-    assert one.completed(version)

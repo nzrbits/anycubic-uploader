@@ -32,6 +32,10 @@ def data_directory() -> Path:
 DATA_DIR = data_directory()
 
 
+def normalize_path(path: Path) -> Path:
+    return path.expanduser().resolve()
+
+
 @contextmanager
 def file_lock(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
