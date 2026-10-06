@@ -101,6 +101,18 @@ def save_token(token: str) -> None:
     _update(lambda settings: settings.update(token=token))
 
 
+def apply_changes(changes: dict, original: Settings) -> None:
+    def apply(settings: Settings) -> None:
+        for key in changes:
+            if settings.get(key) != original.get(key):
+                raise ConfigError(
+                    "Settings changed while this window was open. Reopen it before saving."
+                )
+        settings.update(changes)
+
+    _update(apply)
+
+
 def normalize_folder(folder: Path) -> Path:
     return folder.expanduser().resolve()
 

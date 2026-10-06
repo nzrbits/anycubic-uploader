@@ -41,6 +41,7 @@ CI runs on Windows and macOS with Python 3.10 and 3.12.
 | `notifications.py` | Icons, notifications and folder dialogs |
 | `tray_app.py` | Tray menu and folder watches |
 | `setup_token.py` | Token entry |
+| `settings_dialog.py` | Settings window |
 | `upload_existing.py` | Bulk command |
 
 Keep upload decisions in `upload_queue.py` so event handlers and bulk uploads follow the same rules.

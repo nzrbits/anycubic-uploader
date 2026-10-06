@@ -106,6 +106,36 @@ def _walk(menu):
         yield item
 
 
+def test_manual_upload_wakes_scanner_and_reloads_watches(tmp_path, monkeypatch):
+    config.save({"watch_folders": []})
+    manager = tray_app.WatcherManager(Mock())
+    scanned = threading.Event()
+    monkeypatch.setattr(manager._uploads, "scan", scanned.set)
+    manager.start()
+    try:
+        assert scanned.wait(5)
+        scanned.clear()
+        config.add_watch_folder(tmp_path)
+        manager.upload_pending()
+        assert scanned.wait(5)
+        assert tmp_path in manager._watches
+    finally:
+        manager.stop()
+
+
+def test_menu_exposes_settings_and_manual_upload(monkeypatch):
+    manager, notifier = Mock(), Mock()
+    manager.get_folders.return_value = []
+    editor = Mock(return_value=True)
+    monkeypatch.setattr(tray_app, "open_settings", editor)
+    menu = {item.text: item for item in _walk(tray_app._build_menu(manager, notifier))}
+    menu["Settings"](None)
+    editor.assert_called_once_with(manager.upload_pending)
+    menu["Upload pending files"](None)
+    manager.upload_pending.assert_called_once()
+    notifier.notify.assert_called_once_with("Checking folders", kind="upload")
+
+
 def test_menu_actions_target_their_folder(tmp_path, monkeypatch):
     a, b = tmp_path / "a", tmp_path / "b"
     config.save({"watch_folders": [str(a), str(b)]})

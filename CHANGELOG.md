@@ -9,6 +9,7 @@ All notable changes to this project will be documented here.
 ## [1.1.0] - 2026-10-06
 
 ### Changed
+- The tray menu offers a settings window and a manual pending-upload trigger.
 - Events, startup scans and bulk uploads use one queue and a shared SQLite upload record.
 - Settings and logs use a persistent user data folder. Existing source settings migrate once.
 - Token setup uses explicit paste entry and runs on first launch of packaged builds.

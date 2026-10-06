@@ -18,6 +18,7 @@ from watchdog.observers.api import ObservedWatch
 
 import config as cfg
 from notifications import IS_MAC, IS_WIN, NotificationManager, make_icon
+from settings_dialog import open_settings
 from setup_token import prompt_token
 from storage import DATA_DIR, configure_logging
 from upload_queue import Result, UploadQueue
@@ -52,6 +53,7 @@ class WatcherManager:
         self._watches: dict[Path, ObservedWatch] = {}
         self._lock = threading.RLock()
         self._stop = threading.Event()
+        self._rescan = threading.Event()
         self._uploads = UploadQueue(
             self._finished, lambda path: nm.notify("Uploading", path.name, "upload")
         )
@@ -95,13 +97,16 @@ class WatcherManager:
 
     def _scan_loop(self) -> None:
         while not self._stop.is_set():
+            self._rescan.clear()
             try:
                 self._sync_watches()
                 self._uploads.scan()
             except Exception:
                 logger.exception("Folder scan failed")
-            if self._stop.wait(SCAN_INTERVAL):
-                return
+            self._rescan.wait(SCAN_INTERVAL)
+
+    def upload_pending(self) -> None:
+        self._rescan.set()
 
     def add_folder(self, folder: Path) -> bool:
         folder = cfg.normalize_folder(folder)
@@ -133,6 +138,7 @@ class WatcherManager:
 
     def stop(self) -> None:
         self._stop.set()
+        self._rescan.set()
         self._observer.stop()
         if self._observer.is_alive():
             self._observer.join()
@@ -163,6 +169,18 @@ def _add_folder(wm: WatcherManager, nm: NotificationManager) -> None:
 
 
 def _build_menu(wm: WatcherManager, nm: NotificationManager):
+    def settings(icon, item):
+        try:
+            if not open_settings(wm.upload_pending):
+                nm.notify("Settings already open")
+        except OSError:
+            logger.exception("Could not open settings")
+            nm.notify("Could not open settings", kind="error")
+
+    def upload_pending(icon, item):
+        wm.upload_pending()
+        nm.notify("Checking folders", kind="upload")
+
     def open_action(folder: Path):
         return lambda icon, item: _open_path(folder)
 
@@ -203,6 +221,8 @@ def _build_menu(wm: WatcherManager, nm: NotificationManager):
     return pystray.Menu(
         pystray.MenuItem(APP, None, enabled=False),
         pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Settings", settings),
+        pystray.MenuItem("Upload pending files", upload_pending),
         pystray.MenuItem("Folders to watch", pystray.Menu(folder_items)),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(
@@ -235,7 +255,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=APP)
     parser.add_argument("--setup-token", action="store_true")
     parser.add_argument("--upload-existing", action="store_true")
+    parser.add_argument("--settings", action="store_true")
     args = parser.parse_args()
+    if args.settings:
+        from settings_dialog import main as edit_settings
+
+        return edit_settings()
     configure_logging()
     if args.setup_token:
         return 0 if prompt_token() else 1

@@ -52,6 +52,11 @@ The default folder is `~/Downloads`.
 Right-click the tray icon, open **Folders to watch**, and add or remove folders.
 The app watches files directly inside each folder; it does not scan subfolders.
 
+Open **Settings** to edit the folder list, file extensions and token in one window.
+Save applies the changes and checks the selected folders. Cancel leaves the settings unchanged.
+Choose **Upload pending files** to check your folders immediately and retry failed uploads.
+Files already recorded as uploaded are skipped.
+
 New, modified and renamed files enter the same upload queue.
 The app also scans every 30 seconds to find missed files and retry failures.
 Only one upload runs at a time. Duplicate events for a pending file share one queue entry.
