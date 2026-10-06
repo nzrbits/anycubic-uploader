@@ -6,7 +6,7 @@ VERSION="$(cat "$PROJECT_ROOT/packaging/version.txt")"
 PACKAGE="$PROJECT_ROOT/dist/AnycubicUploader-macOS-$(uname -m).pkg"
 APP='/Applications/Anycubic Uploader.app'
 DATA_DIR="$HOME/Library/Application Support/AnycubicUploader"
-[[ ! -e "$APP" && ! -e "$DATA_DIR" ]] || { echo 'Test app or settings already exist' >&2; exit 1; }
+[[ ! -e "$APP" && ! -e "$DATA_DIR/config.json" ]] || { echo 'Test app or settings already exist' >&2; exit 1; }
 mkdir -p "$DATA_DIR"
 echo '{"token":"installer-test","watch_folders":[],"watch_extensions":[".pm4u"]}' > "$DATA_DIR/config.json"
 CONFIG_HASH="$(shasum -a 256 "$DATA_DIR/config.json")"

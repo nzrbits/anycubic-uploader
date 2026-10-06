@@ -4,9 +4,9 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $setup = Join-Path $projectRoot 'dist\AnycubicUploader-Setup.exe'
 $installDir = Join-Path $env:RUNNER_TEMP ('anycubic-install-' + [Guid]::NewGuid().ToString('N'))
 $dataDir = Join-Path $env:LOCALAPPDATA 'AnycubicUploader'
-if (Test-Path -LiteralPath $dataDir) { throw 'Test data folder already exists' }
-New-Item -ItemType Directory -Path $dataDir | Out-Null
 $configFile = Join-Path $dataDir 'config.json'
+if (Test-Path -LiteralPath $configFile) { throw 'Test settings already exist' }
+New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
 '{"token":"installer-test","watch_folders":[],"watch_extensions":[".pm4u"]}' | Set-Content -LiteralPath $configFile
 $configHash = (Get-FileHash -LiteralPath $configFile).Hash
 $registryKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{B60D44C5-A5EF-4CE8-9ED4-1BEBB7252B13}_is1'
