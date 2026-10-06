@@ -1,74 +1,137 @@
-"""Persistent configuration management for Anycubic Uploader."""
+"""Validated settings with atomic updates."""
+
 from __future__ import annotations
 
 import json
-import os
 import threading
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypedDict
 
-CONFIG_FILE = Path(__file__).parent / "config.json"
-_lock = threading.RLock()  # reentrant: save_token() calls load() then save()
+from storage import DATA_DIR, atomic_json, file_lock
 
-_DEFAULTS: dict = {
-    "token": "",
-    "watch_folders": [str(Path.home() / "Downloads")],
-    "watch_extensions": [".pm4u"],
-}
+CONFIG_FILE = DATA_DIR / "config.json"
+LEGACY_CONFIG_FILE = Path(__file__).parent / "config.json"
+_lock = threading.Lock()
 
 
-def load() -> dict:
-    with _lock:
-        if not CONFIG_FILE.exists():
-            return dict(_DEFAULTS)
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig"))
-            return {**_DEFAULTS, **data}
-        except Exception:
-            return dict(_DEFAULTS)
+class ConfigError(ValueError):
+    pass
 
 
-def save(cfg: dict) -> None:
-    with _lock:
-        CONFIG_FILE.write_text(
-            json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-        if os.name != "nt":  # chmod 600 on Unix so the token is not world-readable
-            os.chmod(CONFIG_FILE, 0o600)
+class Settings(TypedDict):
+    token: str
+    watch_folders: list[str]
+    watch_extensions: list[str]
+
+
+def _defaults() -> Settings:
+    return {
+        "token": "",
+        "watch_folders": [str(Path.home() / "Downloads")],
+        "watch_extensions": [".pm4u"],
+    }
+
+
+def _validated(data: object) -> Settings:
+    if not isinstance(data, dict):
+        raise ConfigError("Settings must be a JSON object")
+    result = {**_defaults(), **data}
+    token = result["token"]
+    if not isinstance(token, str):
+        raise ConfigError("token must be a string")
+    for key in ("watch_folders", "watch_extensions"):
+        values = result[key]
+        if not isinstance(values, list) or any(
+            not isinstance(v, str) or not v.strip() or "\0" in v for v in values
+        ):
+            raise ConfigError(f"{key} must be a list of non-empty strings")
+        result[key] = list(dict.fromkeys(values))
+    if any(
+        len(ext) < 2 or not ext.startswith(".") or any(c in ext for c in "/\\*?[]")
+        for ext in result["watch_extensions"]
+    ):
+        raise ConfigError("watch_extensions must contain suffixes such as .pm4u")
+    result["watch_extensions"] = list(
+        dict.fromkeys(ext.lower() for ext in result["watch_extensions"])
+    )
+    result["token"] = (
+        "" if token.strip() == "YOUR_ANYCUBIC_TOKEN_HERE" else token.strip()
+    )
+    return result
+
+
+def _load() -> Settings:
+    source = CONFIG_FILE
+    if not source.exists():
+        if source != DATA_DIR / "config.json" or not LEGACY_CONFIG_FILE.exists():
+            return _defaults()
+        source = LEGACY_CONFIG_FILE
+    try:
+        settings = _validated(json.loads(source.read_text(encoding="utf-8-sig")))
+    except (OSError, ValueError) as error:
+        raise ConfigError(f"Cannot read {source}: {error}") from error
+    if source != CONFIG_FILE:
+        atomic_json(CONFIG_FILE, settings)
+    return settings
+
+
+def load() -> Settings:
+    with _lock, file_lock(CONFIG_FILE):
+        return _load()
+
+
+def save(settings: dict) -> None:
+    with _lock, file_lock(CONFIG_FILE):
+        atomic_json(CONFIG_FILE, _validated(settings))
+
+
+def _update(change: Callable[[Settings], None]) -> None:
+    with _lock, file_lock(CONFIG_FILE):
+        settings = _load()
+        change(settings)
+        atomic_json(CONFIG_FILE, _validated(settings))
 
 
 def load_token() -> str:
-    return load().get("token", "")
+    return load()["token"]
 
 
 def save_token(token: str) -> None:
-    cfg = load()
-    cfg["token"] = token
-    save(cfg)
+    _update(lambda settings: settings.update(token=token))
+
+
+def normalize_folder(folder: Path) -> Path:
+    return folder.expanduser().resolve()
 
 
 def get_watch_folders() -> list[Path]:
-    raw = load().get("watch_folders", _DEFAULTS["watch_folders"])
-    return [Path(f).expanduser() for f in raw]
+    return list(
+        dict.fromkeys(normalize_folder(Path(f)) for f in load()["watch_folders"])
+    )
 
 
 def add_watch_folder(folder: Path) -> None:
-    cfg = load()
-    folders: list[str] = cfg.setdefault("watch_folders", list(_DEFAULTS["watch_folders"]))
-    s = str(folder)
-    if s not in folders:
-        folders.append(s)
-        save(cfg)
+    path = str(normalize_folder(folder))
+
+    def add(settings: Settings) -> None:
+        folders = [str(normalize_folder(Path(f))) for f in settings["watch_folders"]]
+        settings["watch_folders"] = list(dict.fromkeys([*folders, path]))
+
+    _update(add)
 
 
 def remove_watch_folder(folder: Path) -> None:
-    cfg = load()
-    folders: list[str] = cfg.get("watch_folders", list(_DEFAULTS["watch_folders"]))
-    s = str(folder)
-    if s in folders:
-        folders.remove(s)
-        cfg["watch_folders"] = folders
-        save(cfg)
+    path = normalize_folder(folder)
+    with _lock, file_lock(CONFIG_FILE):
+        settings = _load()
+        folders = [
+            f for f in settings["watch_folders"] if normalize_folder(Path(f)) != path
+        ]
+        if folders != settings["watch_folders"]:
+            settings["watch_folders"] = folders
+            atomic_json(CONFIG_FILE, settings)
 
 
 def get_watch_extensions() -> set[str]:
-    return set(load().get("watch_extensions", _DEFAULTS["watch_extensions"]))
+    return set(load()["watch_extensions"])

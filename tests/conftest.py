@@ -1,4 +1,5 @@
 """Shared fixtures. Every test gets its own config.json and state file in tmp_path."""
+
 from __future__ import annotations
 
 import sys
@@ -9,24 +10,15 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import logging  # noqa: E402
-
-import config  # noqa: E402
-import uploader  # noqa: E402
-
-# uploader.py attaches a FileHandler to the real watcher.log at import time.
-# Drop it so test runs never write fake uploads into the user's log.
-for _h in list(logging.getLogger().handlers):
-    if isinstance(_h, logging.FileHandler):
-        logging.getLogger().removeHandler(_h)
-        _h.close()
+import config
+import upload_state
+import uploader
 
 
 @pytest.fixture(autouse=True)
 def isolated_files(tmp_path, monkeypatch):
-    """Keep tests away from the real config.json and last_upload.json."""
     monkeypatch.setattr(config, "CONFIG_FILE", tmp_path / "config.json")
-    monkeypatch.setattr(uploader, "STATE_FILE", tmp_path / "last_upload.json")
+    monkeypatch.setattr(upload_state, "STATE_FILE", tmp_path / "uploads.sqlite3")
     return tmp_path
 
 
@@ -49,7 +41,8 @@ def fake_api(monkeypatch):
     calls: list[tuple[str, str, dict]] = []
     replies: dict[str, dict] = {
         "/v2/cloud_storage/lockStorageSpace": {
-            "code": 1, "data": {"id": 42, "preSignUrl": "https://s3.example/put"},
+            "code": 1,
+            "data": {"id": 42, "preSignUrl": "https://s3.example/put"},
         },
         "/v2/profile/newUploadFile": {"code": 1, "data": {"id": 7}},
         "/v2/cloud_storage/unlockStorageSpace": {"code": 1},
@@ -58,6 +51,7 @@ def fake_api(monkeypatch):
 
     def fake_post(url, headers, data, timeout):
         import json
+
         path = url.removeprefix(uploader.API_BASE)
         calls.append(("POST", path, json.loads(data)))
         return FakeResponse(replies.get(path, {}))

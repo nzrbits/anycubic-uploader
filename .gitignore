@@ -3,6 +3,8 @@ config.json
 
 # Runtime state
 last_upload.json
+uploads.sqlite3*
+config.json.lock
 watcher.log
 
 # Python

@@ -1,88 +1,57 @@
-# How to Find Your Anycubic Token
+# Enter your Anycubic token
 
-The Anycubic Uploader needs a login token from Anycubic Cloud to upload your files.
-The easiest way is to run `setup_token.py`, which tries to extract it automatically.
+The uploader uses the `XX-Token` from your Anycubic Cloud login.
+Copy it from your browser and paste it into the setup dialog.
+The app does not inspect your browser profile.
 
-If automatic extraction fails, here is how to find it manually.
+## Chrome or Edge
 
----
+1. Open [Anycubic Cloud](https://cloud-universe.anycubic.com/file) and log in.
+2. Open developer tools with `F12`, or `Cmd+Option+I` on macOS.
+3. Open **Application → Local Storage → https://cloud-universe.anycubic.com**.
+4. Copy the full value of **XX-Token**.
+5. Paste it into the uploader's setup dialog.
 
-## Automatic extraction (recommended)
+## Firefox
 
-**Windows:**
+Open developer tools, then **Storage → Local Storage → https://cloud-universe.anycubic.com**.
+Copy **XX-Token** and paste it into the setup dialog.
+
+## Safari
+
+Enable developer features in **Safari → Settings → Advanced**.
+Open the Web Inspector, then select the Anycubic origin under **Storage → Local Storage**.
+Copy **XX-Token**.
+
+## Open setup again
+
+Windows source checkout:
+
 ```powershell
 .venv\Scripts\python.exe setup_token.py
 ```
 
-**macOS / Linux:**
-```bash
+macOS source checkout:
+
+```sh
 .venv/bin/python setup_token.py
 ```
 
-The script will:
-1. Try Microsoft Edge (Windows) or Google Chrome (macOS) to extract the token automatically
-2. Fall back to a manual dialog if automatic extraction fails
+Standalone Windows app:
 
----
-
-## Manual extraction — Google Chrome or Edge
-
-1. Open **[cloud-universe.anycubic.com/file](https://cloud-universe.anycubic.com/file)** in your browser
-2. Log in with your Anycubic account
-3. Open **DevTools**:
-   - Windows/Linux: press `F12` or `Ctrl+Shift+I`
-   - macOS: press `Cmd+Option+I`
-4. Click the **Application** tab (you may need to expand the `»` menu)
-5. In the left panel, expand **Storage → Local Storage**
-6. Click on `https://cloud-universe.anycubic.com`
-7. Find the key **`XX-Token`** in the list
-8. **Double-click** the value cell and press `Ctrl+A` then `Ctrl+C` to copy the full token
-
-   ![DevTools screenshot showing XX-Token key in Local Storage](./token-devtools.png)
-
-9. Run `setup_token.py` and paste the token when prompted, or paste it directly into `config.json`:
-
-```json
-{
-  "token": "eyJ...<paste your full token here>..."
-}
+```powershell
+.\AnycubicUploader.exe --setup-token
 ```
 
----
+Standalone macOS app:
 
-## Manual extraction — Firefox
+```sh
+"Anycubic Uploader.app/Contents/MacOS/Anycubic Uploader" --setup-token
+```
 
-1. Open **[cloud-universe.anycubic.com/file](https://cloud-universe.anycubic.com/file)**
-2. Log in
-3. Press `F12` to open DevTools
-4. Go to **Storage** tab
-5. Expand **Local Storage → https://cloud-universe.anycubic.com**
-6. Find `XX-Token` and copy its value
+The token is saved in `config.json` in the app's [settings folder](../README.md#settings-and-logs).
+Setup hides the pasted value and does not print it.
+Cancelling leaves the existing token unchanged.
 
----
-
-## Manual extraction — Safari (macOS)
-
-1. Enable DevTools: **Safari → Settings → Advanced → Show features for web developers**
-2. Open **[cloud-universe.anycubic.com/file](https://cloud-universe.anycubic.com/file)**
-3. Log in
-4. Press `Cmd+Option+I` to open Web Inspector
-5. Go to **Storage** tab
-6. Click **Local Storage → cloud-universe.anycubic.com**
-7. Find `XX-Token` and copy its value
-
----
-
-## Token expiry
-
-Tokens expire after some time (typically weeks to months).
-If uploads suddenly start failing with authentication errors, re-run `setup_token.py`
-to get a fresh token — it will overwrite the old one in `config.json`.
-
----
-
-## Security note
-
-Your token is stored **locally only** in `config.json` next to the app.
-It is never transmitted anywhere except to `cloud-universe.anycubic.com` during uploads.
-The `config.json` file is excluded from git (listed in `.gitignore`).
+If uploads fail with authentication errors, log in again and replace the saved token.
+The running uploader uses the replacement on its next attempt.

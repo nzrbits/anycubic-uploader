@@ -1,212 +1,147 @@
 # Anycubic Cloud Auto-Uploader
 
-A system tray app for **Windows and macOS** that watches folders for `.pm4u` slicer files
-and uploads them to Anycubic Cloud automatically — so your printer is always ready.
+A Windows and macOS tray app that uploads `.pm4u` files to Anycubic Cloud.
+Choose the folders where your slicer saves files. The app waits for each file to stop changing, then uploads it.
 
----
+## Start from source
 
-## Features
+You need Python 3.10 or later with Tk support and an Anycubic Cloud account.
 
-- Runs silently as a system tray / menu bar icon
-- Watches any number of folders — configurable at any time from the tray menu
-- Detects new `.pm4u` files instantly and uploads them via the Anycubic Cloud API
-- Catches up on files missed while the app was not running
-- Custom toast notifications on Windows; native notifications on macOS
-- Token stored **locally only** in `config.json` — never sent anywhere except Anycubic Cloud
-- Cross-platform: Windows 10/11 and macOS 12+
-
----
-
-## Requirements
-
-| | Windows | macOS |
-|---|---|---|
-| Python | 3.10 or later | 3.10 or later, with Tk |
-| Browser (token setup) | Edge or Chrome | Chrome |
-| OS | Windows 10 / 11 | macOS 12 Monterey or later |
-
-No Edge required on macOS — Chrome works, or paste your token manually.
-
----
-
-## Quick start
-
-### 1. Download
-
-```bash
+```sh
 git clone https://github.com/nzrbits/anycubic-uploader
 cd anycubic-uploader
 ```
 
-Or download the [latest release](../../releases/latest) as a standalone `.exe` (Windows)
-or `.app` (macOS) — no Python needed.
+On Windows, run this in PowerShell:
 
-### 2. First-time setup
-
-**Windows (PowerShell):**
 ```powershell
 .\start.ps1
 ```
 
-**macOS / Linux (Terminal):**
-```bash
+On macOS:
+
+```sh
 chmod +x start.sh
 ./start.sh
 ```
 
-The launcher will:
-1. Create a Python virtual environment (once)
-2. Install dependencies (once)
-3. Run `setup_token.py` if no token is saved yet
-4. Start the tray app
+The launcher creates a virtual environment and installs dependencies when needed.
+If installation fails, run it again. It retries without treating the partial installation as complete.
 
-### 3. Get your token
+Homebrew Python needs a separate Tk package. The launcher prints the package name if Tk is missing.
+For Python 3.12, that is `brew install python-tk@3.12`.
 
-`setup_token.py` tries to extract the token automatically from Edge or Chrome.
-If that fails, it shows a dialog with step-by-step instructions.
+## Use a standalone app
 
-> For detailed instructions on every browser, see **[docs/token-guide.md](docs/token-guide.md)**
+Download the Windows executable or macOS app from [Releases](https://github.com/nzrbits/anycubic-uploader/releases).
+The packaged app includes Python. Current source builds offer token setup on first launch.
+Older releases may still require the separate setup script.
 
-### 4. Configure watch folders
+## Enter your token
 
-The default watch folder is `~/Downloads`. To change or add folders:
+On first launch, the app asks you to paste your Anycubic `XX-Token`.
+Open Anycubic Cloud in your browser, log in, and copy the token from Local Storage.
+See the [token guide](docs/token-guide.md) for the browser steps.
 
-- **Right-click the tray icon** → **Folders to watch** → **Add folder…**
-- Or edit `config.json` directly:
+The app does not read browser profiles or close browser windows.
+Cancelling setup exits without changing your settings.
+
+## Choose folders
+
+The default folder is `~/Downloads`.
+Right-click the tray icon, open **Folders to watch**, and add or remove folders.
+The app watches files directly inside each folder; it does not scan subfolders.
+
+New, modified and renamed files enter the same upload queue.
+The app also scans every 30 seconds to find missed files and retry failures.
+Only one upload runs at a time. Duplicate events for a pending file share one queue entry.
+
+Successful uploads are recorded by file path, size and modification time.
+An unchanged file is skipped on later scans. A failed file stays eligible even when newer files upload successfully.
+The tray app and bulk command share this record to avoid uploading the same version concurrently.
+
+Quitting stops new work and waits for the current transfer.
+Files left in the queue are found again on the next launch.
+After a forced exit, an unfinished upload can be retried once its 20-minute reservation in the local record expires.
+
+## Settings and logs
+
+Open **Open settings folder** from the tray menu.
+
+| System | Default folder |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\AnycubicUploader` |
+| macOS | `~/Library/Application Support/AnycubicUploader` |
+| Linux | `$XDG_DATA_HOME/anycubic-uploader`, or `~/.local/share/anycubic-uploader` |
+
+Set `ANYCUBIC_UPLOADER_DATA_DIR` to use another folder.
+Source runs and packaged apps use the same paths.
+
+| File | Contents |
+| --- | --- |
+| `config.json` | Token, watched folders and file extensions |
+| `uploads.sqlite3` | Completed file versions and active uploads |
+| `watcher.log` | Upload activity and errors; two rotated copies are kept |
+
+Example settings:
 
 ```json
 {
-  "token": "eyJ...",
-  "watch_folders": [
-    "~/Downloads",
-    "~/Desktop/prints"
-  ],
+  "token": "<your XX-Token>",
+  "watch_folders": ["~/Downloads", "~/Desktop/prints"],
   "watch_extensions": [".pm4u"]
 }
 ```
 
-### 5. Autostart (optional)
+Folder paths expand `~`. Extension matching ignores case.
+Invalid settings produce an error instead of silently resetting your folders.
+Keep `config.json` private: it contains your login token.
 
-See **[docs/autostart.md](docs/autostart.md)** for instructions on Windows (Startup folder)
-and macOS (Launch Agent or Login Items).
+When upgrading a source checkout, an existing `config.json` next to the scripts is copied to the settings folder once.
+The old `last_upload.json` timestamp cannot identify which files succeeded.
+The first scan after upgrading may upload existing files again.
 
----
+## Upload existing files
 
-## Tray menu
+Windows:
 
-Right-click the tray icon to access:
-
-```
-Anycubic Uploader
-─────────────────
-Folders to watch ▶
-  ~/Downloads
-    ├── Open in Explorer
-    └── Remove
-  ~/Desktop/prints
-    ├── Open in Explorer
-    └── Remove
-  ─────────────────
-  Add folder…
-─────────────────
-Open log
-─────────────────
-Quit
-```
-
----
-
-## Manual bulk upload
-
-To upload all `.pm4u` files already in your watched folders:
-
-**Windows:**
 ```powershell
 .venv\Scripts\python.exe upload_existing.py
 ```
 
-**macOS / Linux:**
-```bash
+macOS:
+
+```sh
 .venv/bin/python upload_existing.py
 ```
 
----
+The command uses the same file checks and upload record as the tray app.
+It prints uploaded, failed, deferred and skipped counts. Failed or deferred files give exit code 1.
 
-## Files
+Standalone Windows builds accept `AnycubicUploader.exe --upload-existing`.
+For a macOS bundle, run `"Anycubic Uploader.app/Contents/MacOS/Anycubic Uploader" --upload-existing` in Terminal.
+The Windows GUI executable does not open a console for command output.
 
-| File | Purpose |
-|---|---|
-| `config.py` | Config management (token, folders, extensions) |
-| `tray_app.py` | Tray app, notifications, folder watcher manager |
-| `uploader.py` | Anycubic Cloud API + upload logic |
-| `setup_token.py` | One-time token extraction |
-| `upload_existing.py` | Bulk upload utility |
-| `start.ps1` | Windows launcher |
-| `start.sh` | macOS / Linux launcher |
-| `config.json` | Your settings — **not in git** |
-| `config.example.json` | Template for config.json |
-| `watcher.log` | Upload log (last ~1000 entries) |
-| `last_upload.json` | Timestamp used for catch-up logic |
+## Replace an expired token
 
----
-
-## How uploads work
-
-The Anycubic Cloud API uses a 4-step presigned S3 flow:
-
-1. `POST /v2/cloud_storage/lockStorageSpace` — reserve space, receive AWS presigned URL
-2. `PUT <presignUrl>` — upload file bytes directly to S3
-3. `POST /v2/profile/newUploadFile` — register the upload, receive `cloud_file_id`
-4. `POST /v2/cloud_storage/unlockStorageSpace` — finalize and make file available
-
-This was reverse-engineered from the Anycubic Cloud web client.
-
----
-
-## Token expiry
-
-Tokens expire after some time. If uploads fail with authentication errors:
-
-```bash
-python setup_token.py   # or: .venv/bin/python setup_token.py
-```
-
-This overwrites the old token in `config.json`.
-
----
+Run `setup_token.py` with the virtual environment's Python, or start the packaged app with `--setup-token`.
+The uploader reads the saved token before each attempt, so the running tray app picks up the replacement.
 
 ## Troubleshooting
 
-**`No module named '_tkinter'` on macOS**
-Homebrew Python ships without Tk. Install it for your Python version, for example
-`brew install python-tk@3.12`. `start.sh` checks this and prints the matching command.
+| Symptom | What to check |
+| --- | --- |
+| Authentication errors | Replace your token with the steps above |
+| File keeps being deferred | Check whether your slicer is still writing it; empty files are also deferred |
+| Folder is unavailable | Restore it or remove it from the tray menu |
+| Upload failed | Open the log; the next scan retries the file |
+| Tk import error on macOS | Install the matching `python-tk` Homebrew package |
 
-**Tray icon doesn't appear on macOS**
-Make sure `pyobjc-framework-Cocoa` is installed: `pip install pyobjc-framework-Cocoa`
+If a transfer or registration fails, the app attempts to release its cloud reservation.
+A rejected finalization counts as a failure.
+The upload flow uses Anycubic's web API and can break if that API changes.
 
-**"No token found" on startup**
-Run `setup_token.py` — see [docs/token-guide.md](docs/token-guide.md)
+For login startup, see [autostart setup](docs/autostart.md).
+For tests and builds, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Upload fails with HTTP 4xx**
-Your token has expired. Re-run `setup_token.py`.
-
-**File is detected but not uploaded**
-The app waits for the file to finish writing before uploading.
-If the slicer takes a long time to save, increase `FILE_STABLE_WAIT` in `uploader.py`.
-
-**Logs**
-All events are logged to `watcher.log` in the app folder.
-Open it from the tray menu: **Open log**.
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). All contributions welcome — bug reports,
-feature requests, macOS testing, and code PRs.
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE)
+MIT licensed.

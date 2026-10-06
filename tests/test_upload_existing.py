@@ -1,48 +1,41 @@
-from __future__ import annotations
-
-import pytest
-
 import config
 import upload_existing
+import uploader
 
 
 def test_exits_without_token(capsys):
-    with pytest.raises(SystemExit) as e:
-        upload_existing.main()
-    assert e.value.code == 1
+    assert upload_existing.main() == 1
     assert "No token" in capsys.readouterr().out
 
 
-def test_uploads_only_matching_files(tmp_path, monkeypatch, capsys):
-    watch = tmp_path / "watch"
-    watch.mkdir()
-    (watch / "a.pm4u").write_bytes(b"1")
-    (watch / "b.pm4u").write_bytes(b"2")
-    (watch / "c.stl").write_bytes(b"3")
-    config.save({"token": "tok", "watch_folders": [str(watch), str(tmp_path / "missing")]})
-
+def test_bulk_uses_shared_state_and_retries_failed_files(tmp_path, monkeypatch, capsys):
+    (tmp_path / "a.pm4u").write_bytes(b"1")
+    (tmp_path / "b.PM4U").write_bytes(b"2")
+    (tmp_path / "c.stl").write_bytes(b"3")
+    config.save({"token": "mock", "watch_folders": [str(tmp_path)]})
+    monkeypatch.setattr(uploader, "wait_until_stable", lambda path, cancel=None: True)
     seen = []
 
-    def fake_upload(path, token):
-        seen.append((path.name, token))
-        return path.name == "a.pm4u"
+    def attempt(path, token):
+        seen.append(path.name)
+        return path.name != "a.pm4u"
 
-    monkeypatch.setattr(upload_existing, "upload", fake_upload)
-    upload_existing.main()
+    monkeypatch.setattr(uploader, "upload", attempt)
+    assert upload_existing.main() == 1
+    assert seen == ["a.pm4u", "b.PM4U"]
+    seen.clear()
+    assert upload_existing.main() == 1
+    assert seen == ["a.pm4u"]
+    assert "1 skipped" in capsys.readouterr().out
 
-    assert seen == [("a.pm4u", "tok"), ("b.pm4u", "tok")]
-    assert "1 succeeded, 1 failed" in capsys.readouterr().out
 
-
-def test_exception_counts_as_failure(tmp_path, monkeypatch, capsys):
+def test_bulk_defers_unstable_files(tmp_path, monkeypatch):
     (tmp_path / "a.pm4u").write_bytes(b"1")
-    config.save({"token": "tok", "watch_folders": [str(tmp_path)]})
-
-    def boom(path, token):
-        raise RuntimeError("network down")
-
-    monkeypatch.setattr(upload_existing, "upload", boom)
-    upload_existing.main()
-    out = capsys.readouterr().out
-    assert "ERROR: a.pm4u: network down" in out
-    assert "0 succeeded, 1 failed" in out
+    config.save({"token": "mock", "watch_folders": [str(tmp_path)]})
+    monkeypatch.setattr(uploader, "wait_until_stable", lambda path, cancel=None: False)
+    monkeypatch.setattr(
+        uploader,
+        "upload",
+        lambda *args: (_ for _ in ()).throw(AssertionError("must not upload")),
+    )
+    assert upload_existing.main() == 1
