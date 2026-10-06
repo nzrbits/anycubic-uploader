@@ -136,6 +136,19 @@ def test_menu_exposes_settings_and_manual_upload(monkeypatch):
     notifier.notify.assert_called_once_with("Checking folders", kind="upload")
 
 
+def test_stop_during_scan_does_not_wait_for_next_interval(monkeypatch):
+    manager = tray_app.WatcherManager(Mock())
+    wake = Mock()
+    wake.clear.side_effect = manager._stop.set
+    monkeypatch.setattr(manager, "_rescan", wake)
+    monkeypatch.setattr(manager._uploads, "scan", Mock())
+    try:
+        manager._scan_loop()
+        wake.wait.assert_not_called()
+    finally:
+        manager.stop()
+
+
 def test_menu_actions_target_their_folder(tmp_path, monkeypatch):
     a, b = tmp_path / "a", tmp_path / "b"
     config.save({"watch_folders": [str(a), str(b)]})

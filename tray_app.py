@@ -103,7 +103,8 @@ class WatcherManager:
                 self._uploads.scan()
             except Exception:
                 logger.exception("Folder scan failed")
-            self._rescan.wait(SCAN_INTERVAL)
+            if not self._stop.is_set():
+                self._rescan.wait(SCAN_INTERVAL)
 
     def upload_pending(self) -> None:
         self._rescan.set()
