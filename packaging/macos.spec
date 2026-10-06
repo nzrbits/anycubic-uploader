@@ -34,5 +34,5 @@ app = BUNDLE(
     name='Anycubic Uploader.app',
     bundle_identifier='com.anycubic.uploader',
     info_plist={'NSHighResolutionCapable': True, 'LSUIElement': True,
-                'CFBundleShortVersionString': '1.1.0', 'CFBundleVersion': '1.1.0'},
+                'CFBundleShortVersionString': '1.1.1', 'CFBundleVersion': '1.1.1'},
 )

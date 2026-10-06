@@ -82,11 +82,28 @@ def test_dialog_save_and_cancel(monkeypatch, tmp_path):
     folders = [str(tmp_path / "prints")]
     initial = config.load()
     errors = []
+    applied_icons = []
     action = "Save"
 
     def make_root():
         root = real_tk()
         root.withdraw()
+        native_iconphoto = root.iconphoto
+
+        def apply_icons(default, *images):
+            native_iconphoto(default, *images)
+            applied_icons.append(
+                (
+                    default,
+                    [
+                        root.tk.call(str(image), "get", 32, 20)
+                        for image in images
+                        if image.width() == 64
+                    ],
+                )
+            )
+
+        root.iconphoto = apply_icons
 
         def edit():
             try:
@@ -122,6 +139,7 @@ def test_dialog_save_and_cancel(monkeypatch, tmp_path):
     action = "Save"
     assert settings_dialog.main() == 0
     assert not errors
+    assert applied_icons == [(True, [(255, 148, 60)]), (True, [(255, 148, 60)])]
     assert config.load()["watch_folders"] == folders
     assert config.load_token() == "new"
     assert config.get_watch_extensions() == {".pm4u", ".gcode"}

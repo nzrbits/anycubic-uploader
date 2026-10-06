@@ -19,6 +19,7 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, a.binaries, a.datas, [],
     name='AnycubicUploader',
+    icon=str(ROOT / 'packaging' / 'anycubic.ico'),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
