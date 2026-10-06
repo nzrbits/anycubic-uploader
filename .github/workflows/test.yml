@@ -15,6 +15,9 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
         python-version: ["3.10", "3.12"]
+        include:
+          - os: macos-15-intel
+            python-version: "3.12"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +45,18 @@ jobs:
         if: matrix.os == 'windows-latest' && matrix.python-version == '3.12'
         run: pyinstaller packaging/windows.spec
 
+      - name: Build and verify Windows setup
+        if: matrix.os == 'windows-latest' && matrix.python-version == '3.12'
+        run: |
+          ./packaging/build-windows-installer.ps1
+          ./packaging/verify-windows-installer.ps1
+
       - name: Build macOS app
-        if: matrix.os == 'macos-latest' && matrix.python-version == '3.12'
+        if: startsWith(matrix.os, 'macos-') && matrix.python-version == '3.12'
         run: pyinstaller packaging/macos.spec
+
+      - name: Build and verify macOS installer
+        if: startsWith(matrix.os, 'macos-') && matrix.python-version == '3.12'
+        run: |
+          bash packaging/build-macos-installer.sh
+          bash packaging/verify-macos-installer.sh

@@ -31,10 +31,24 @@ If installation fails, run it again. It retries without treating the partial ins
 Homebrew Python needs a separate Tk package. The launcher prints the package name if Tk is missing.
 For Python 3.12, that is `brew install python-tk@3.12`.
 
-## Use a standalone app
+## Install the app
 
-Download the Windows executable or macOS app from [Releases](https://github.com/nzrbits/anycubic-uploader/releases).
-The packaged app includes Python.
+Download a setup package from [Releases](https://github.com/nzrbits/anycubic-uploader/releases/latest). Python is included.
+
+| System | Download |
+| --- | --- |
+| Windows | `AnycubicUploader-Setup.exe` |
+| Mac with Apple Silicon | `AnycubicUploader-macOS-arm64.pkg` |
+| Mac with Intel | `AnycubicUploader-macOS-x86_64.pkg` |
+
+On Windows, open the setup and click **Install**. It installs for your account, adds a Start menu shortcut and starts the app. Administrator access is not needed.
+On macOS, open the package and follow the standard Installer. It installs in `/Applications`; open **Anycubic Uploader** there afterwards.
+
+Quit the app before updating. Setups leave your token, settings and upload history intact. Autostart is optional; see the [login instructions](docs/autostart.md).
+
+To uninstall on Windows, use **Settings → Apps → Installed apps**. On macOS, move the app from Applications to Trash. Your settings remain in the user data folder.
+
+The portable Windows executable and Apple Silicon app ZIP remain available. The releases are unsigned; see the [FAQ](docs/faq.md#why-does-my-system-ask-about-the-publisher) if your system asks about the publisher.
 
 ## Enter your token
 
