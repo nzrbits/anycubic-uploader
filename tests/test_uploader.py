@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import threading
 
 import pytest
 
@@ -146,14 +147,14 @@ def test_network_errors_release_reservation(tmp_path, fake_api, monkeypatch, sta
     else:
         original = uploader._api_post
 
-        def fail(token, endpoint, payload):
+        def fail(token, endpoint, payload, timeout=30):
             if (stage == "claim" and endpoint.endswith("newUploadFile")) or (
                 stage == "finalize"
                 and endpoint.endswith("unlockStorageSpace")
                 and payload["is_delete_cos"] == 0
             ):
                 raise uploader.requests.ConnectionError("offline")
-            return original(token, endpoint, payload)
+            return original(token, endpoint, payload, timeout=timeout)
 
         monkeypatch.setattr(uploader, "_api_post", fail)
     assert not uploader.upload(path, "mock")
@@ -214,3 +215,41 @@ def test_free_storage_formats_gb(fake_api):
         "data": {"total_size": 8 * 1_073_741_824, "used_size": 3 * 1_073_741_824},
     }
     assert uploader.free_storage("mock") == "5.0 GB free"
+
+
+def test_cancel_during_transfer_releases_reservation(tmp_path, fake_api, monkeypatch):
+    path = tmp_path / "part.pm4u"
+    path.write_bytes(b"model data")
+    cancel = threading.Event()
+
+    def put(url, data, timeout):
+        assert data.read(2) == b"mo"
+        cancel.set()
+        data.read(2)
+        pytest.fail("Cancelled stream kept sending data")
+
+    monkeypatch.setattr(uploader.requests, "put", put)
+    assert not uploader.upload(path, "mock", cancel)
+    assert [call[1] for call in fake_api.calls] == [
+        "/v2/cloud_storage/lockStorageSpace",
+        "/v2/cloud_storage/unlockStorageSpace",
+    ]
+    assert fake_api.calls[-1][2] == {"id": 42, "is_delete_cos": 1}
+
+
+def test_cancelled_upload_does_not_reserve_storage(tmp_path, fake_api):
+    cancel = threading.Event()
+    cancel.set()
+    assert not uploader.upload(tmp_path / "missing.pm4u", "mock", cancel)
+    assert fake_api.calls == []
+
+
+def test_upload_stream_keeps_content_length(tmp_path):
+    path = tmp_path / "part.pm4u"
+    path.write_bytes(b"model data")
+    with uploader._UploadStream(path, threading.Event()) as stream:
+        request = uploader.requests.Request(
+            "PUT", "https://s3.example/put", data=stream
+        ).prepare()
+        assert request.headers["Content-Length"] == "10"
+        assert "Transfer-Encoding" not in request.headers

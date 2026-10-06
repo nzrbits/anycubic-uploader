@@ -6,6 +6,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-06
+
+### Fixed
+- Quit cancels the current upload and releases its cloud reservation instead of waiting for the whole transfer.
+- Upload completion and failure notifications are suppressed during shutdown.
+
 ## [1.1.2] - 2026-10-06
 
 ### Changed

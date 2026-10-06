@@ -63,6 +63,8 @@ class WatcherManager:
         )
 
     def _finished(self, path: Path, result: Result) -> None:
+        if self._stop.is_set():
+            return
         if result == Result.UPLOADED:
             free = free_storage(cfg.load_token())
             self._nm.notify("Uploaded", path.name + (f"\n{free}" if free else ""))
@@ -113,6 +115,7 @@ class WatcherManager:
     def stop(self) -> None:
         self._stop.set()
         self._rescan.set()
+        self._uploads.cancel()
         self._observer.stop()
         if self._observer.is_alive():
             self._observer.join()
@@ -142,6 +145,8 @@ def _build_menu(wm: WatcherManager, nm: NotificationManager):
         nm.notify("Checking folders", kind="upload")
 
     def on_quit(icon, item):
+        icon.visible = False
+
         def stop():
             try:
                 wm.stop()
